@@ -19,7 +19,16 @@ public class StaticFileHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        try (InputStream in = plugin.getResource("web/index.html")) {
+        String path = exchange.getRequestURI().getPath();
+        if (path.equals("/") || path.isEmpty()) {
+            path = "/index.html";
+        }
+        if (path.contains("..")) {
+            exchange.sendResponseHeaders(404, -1);
+            return;
+        }
+
+        try (InputStream in = plugin.getResource("web" + path)) {
             if (in == null) {
                 exchange.sendResponseHeaders(404, -1);
                 return;
@@ -32,11 +41,18 @@ public class StaticFileHandler implements HttpHandler {
             }
             byte[] body = buffer.toByteArray();
 
-            exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+            exchange.getResponseHeaders().set("Content-Type", contentType(path));
             exchange.sendResponseHeaders(200, body.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(body);
             }
         }
+    }
+
+    private String contentType(String path) {
+        if (path.endsWith(".html")) return "text/html; charset=utf-8";
+        if (path.endsWith(".css")) return "text/css; charset=utf-8";
+        if (path.endsWith(".js")) return "application/javascript; charset=utf-8";
+        return "application/octet-stream";
     }
 }

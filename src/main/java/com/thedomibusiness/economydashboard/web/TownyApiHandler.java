@@ -51,6 +51,19 @@ public class TownyApiHandler implements HttpHandler {
               .append("\"nation\":").append(t.nation != null ? "\"" + escape(t.nation) + "\"" : "null")
               .append("}");
         }
+        sb.append("],");
+
+        sb.append("\"allTowns\":[");
+        int allLimit = Math.min(snapshot.allTowns.size(), 2000);
+        for (int i = 0; i < allLimit; i++) {
+            TownySnapshot.TownStats t = snapshot.allTowns.get(i);
+            if (i > 0) sb.append(",");
+            sb.append("{\"name\":\"").append(escape(t.name)).append("\",")
+              .append("\"balance\":").append(format(t.balance)).append(",")
+              .append("\"plots\":").append(t.plots).append(",")
+              .append("\"nation\":").append(t.nation != null ? "\"" + escape(t.nation) + "\"" : "null")
+              .append("}");
+        }
         sb.append("]");
 
         sb.append("}");

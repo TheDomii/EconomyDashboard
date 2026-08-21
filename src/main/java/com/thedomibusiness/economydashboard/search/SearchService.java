@@ -1,5 +1,6 @@
 package com.thedomibusiness.economydashboard.search;
 
+import com.thedomibusiness.economydashboard.economy.EconomySnapshot;
 import com.thedomibusiness.economydashboard.quickshop.QuickShopService;
 import com.thedomibusiness.economydashboard.quickshop.QuickShopSnapshot;
 import com.thedomibusiness.economydashboard.regionmarket.RegionMarketService;
@@ -7,9 +8,6 @@ import com.thedomibusiness.economydashboard.regionmarket.RegionMarketSnapshot;
 import com.thedomibusiness.economydashboard.traders.DtlTradersLogCollector;
 import com.thedomibusiness.economydashboard.traders.ShopPriceEntry;
 import com.thedomibusiness.economydashboard.traders.TraderSnapshot;
-import net.milkbowl.vault.economy.Economy;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -21,25 +19,24 @@ import java.util.function.Supplier;
 
 /**
  * Live, on-demand search across players, shops and items. Not indexed - each call
- * re-scans the current data (Bukkit's offline players, the trader database, and the
+ * re-scans the current data (the latest economy snapshot, the trader database, and the
  * live shop price list), which is fine at the scale of a single server's economy.
  */
 public class SearchService {
 
     private static final int DEFAULT_LIMIT = 20;
 
-    private final Plugin plugin;
-    private final Economy economy;
+    private final Supplier<EconomySnapshot> economySnapshotSupplier;
     private final DtlTradersLogCollector tradersCollector;
     private final Supplier<List<ShopPriceEntry>> pricesSupplier;
     private final QuickShopService quickShopService;
     private final RegionMarketService regionMarketService;
 
-    public SearchService(Plugin plugin, Economy economy, DtlTradersLogCollector tradersCollector,
+    public SearchService(Supplier<EconomySnapshot> economySnapshotSupplier,
+                          DtlTradersLogCollector tradersCollector,
                           Supplier<List<ShopPriceEntry>> pricesSupplier, QuickShopService quickShopService,
                           RegionMarketService regionMarketService) {
-        this.plugin = plugin;
-        this.economy = economy;
+        this.economySnapshotSupplier = economySnapshotSupplier;
         this.tradersCollector = tradersCollector;
         this.pricesSupplier = pricesSupplier;
         this.quickShopService = quickShopService;
@@ -66,18 +63,14 @@ public class SearchService {
 
     private List<SearchResult.PlayerResult> searchPlayers(String needle) {
         List<SearchResult.PlayerResult> results = new ArrayList<>();
-        for (OfflinePlayer player : plugin.getServer().getOfflinePlayers()) {
+        for (EconomySnapshot.PlayerBalance balance : economySnapshotSupplier.get().allBalances) {
             if (results.size() >= DEFAULT_LIMIT) {
                 break;
             }
-            String name = player.getName();
-            if (name == null || !name.toLowerCase(Locale.ROOT).contains(needle)) {
+            if (balance.name == null || !balance.name.toLowerCase(Locale.ROOT).contains(needle)) {
                 continue;
             }
-            if (!economy.hasAccount(player)) {
-                continue;
-            }
-            results.add(new SearchResult.PlayerResult(name, economy.getBalance(player)));
+            results.add(new SearchResult.PlayerResult(balance.name, balance.balance));
         }
         return results;
     }

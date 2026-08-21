@@ -12,7 +12,7 @@ import java.util.logging.Level;
 public class QuickShopService implements AutoCloseable {
 
     private static final int SHOP_LIST_LIMIT = 500;
-    private static final int TOP_OWNERS_LIMIT = 10;
+    private static final int TOP_OWNERS_LIMIT = 500;
 
     private final Plugin plugin;
     private final QuickShopDatabase db;

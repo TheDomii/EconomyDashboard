@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Wirtschaft - Server-Wirtschaft Dashboard</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="/">Übersicht</a>
+    <a href="/economy.html" class="active">Wirtschaft</a>
+    <a href="/traders.html">Händler</a>
+    <a href="/towny.html">Towny</a>
+    <a href="/quickshops.html">QuickShops</a>
+    <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <span class="spacer"></span>
+    <a href="/logout" class="logout">Abmelden</a>
+  </nav>
+
+  <h1>Wirtschaft</h1>
+  <div class="sub" id="updated">lade...</div>
+
+  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
+  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Spieler filtern / als CSV exportieren</h3>
+    <div class="export-panel" id="export-players" style="border-top:none; margin-top:0; padding-top:0;">
+      <input type="text" placeholder="Name enthält..." data-param="name">
+      <input type="number" placeholder="Min. Guthaben" data-param="minBalance">
+      <input type="number" placeholder="Max. Guthaben" data-param="maxBalance">
+      <button onclick="exportCsv('export-players', '/api/economy/export.csv')">CSV herunterladen</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="totalMoney">-</div>
+      <div class="stat-label">Geld im Umlauf (Summe aller Spielerkonten)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="playerCount">-</div>
+      <div class="stat-label">Spieler mit Konto</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="avgMoney">-</div>
+      <div class="stat-label">Durchschnitt pro Spieler</div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <h3 style="margin-top:0;">Verteilung nach Kontostand</h3>
+      <div id="distribution"></div>
+    </div>
+    <div class="panel">
+      <div class="table-toolbar">
+        <h3 style="margin:0;">Reichste Spieler</h3>
+        <div class="page-size-select">
+          Anzeigen:
+          <select id="pageSize" onchange="renderTable()">
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+            <option value="all">Alle</option>
+          </select>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Guthaben</th></tr></thead>
+        <tbody id="topTable"></tbody>
+      </table>
+      <div class="sub count-hint" id="countHint"></div>
+    </div>
+  </div>
+
+<script src="/app.js"></script>
+<script>
+let allBalances = [];
+
+function renderTable() {
+  const size = pageSizeValue(document.getElementById('pageSize'));
+  const shown = sliceForDisplay(allBalances, size);
+  const tbody = document.getElementById('topTable');
+  tbody.innerHTML = '';
+  shown.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + p.name + '</td><td style="text-align:right;">' + formatMoney(p.balance) + '</td>';
+    tbody.appendChild(tr);
+  });
+  document.getElementById('countHint').textContent =
+    shown.length + ' von ' + allBalances.length + ' Spielern angezeigt.';
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/economy/overview');
+    const data = await res.json();
+
+    document.getElementById('updated').textContent =
+      'Stand: ' + new Date(data.generatedAtMillis).toLocaleString('de-DE');
+    document.getElementById('totalMoney').textContent = formatMoney(data.totalMoney);
+    document.getElementById('playerCount').textContent = formatNumber(data.playerCount);
+    document.getElementById('avgMoney').textContent =
+      data.playerCount > 0 ? formatMoney(data.totalMoney / data.playerCount) : '0';
+
+    const distEl = document.getElementById('distribution');
+    distEl.innerHTML = '';
+    const maxCount = Math.max(1, ...Object.values(data.distribution));
+    for (const [label, count] of Object.entries(data.distribution)) {
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.innerHTML =
+        '<div class="bar-label">' + label + '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + (count / maxCount * 100) + '%"></div></div>' +
+        '<div class="bar-count">' + formatNumber(count) + '</div>';
+      distEl.appendChild(row);
+    }
+
+    allBalances = data.allBalances;
+    renderTable();
+  } catch (e) {
+    document.getElementById('updated').textContent = 'Fehler beim Laden: ' + e;
+  }
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

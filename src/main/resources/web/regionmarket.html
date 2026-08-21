@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>AdvancedRegionMarket - Server-Wirtschaft Dashboard</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="/">Übersicht</a>
+    <a href="/economy.html">Wirtschaft</a>
+    <a href="/traders.html">Händler</a>
+    <a href="/towny.html">Towny</a>
+    <a href="/quickshops.html">QuickShops</a>
+    <a href="/regionmarket.html" class="active">AdvancedRegionMarket</a>
+    <span class="spacer"></span>
+    <a href="/logout" class="logout">Abmelden</a>
+  </nav>
+
+  <h1>AdvancedRegionMarket</h1>
+  <div class="sub" id="updated">ARM hat kein zuverlaessiges "Region verkauft"-Event (PreBuyEvent feuert vor der eigentlichen Geld-/Besitzuebertragung) - Verkaeufe werden daher erkannt, indem der Sold-Status jeder Region bei jeder Aktualisierung mit dem vorherigen Stand verglichen wird. Zeitstempel = zuerst erkannt, nicht exakter Kaufzeitpunkt.</div>
+
+  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
+  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Regionen filtern / als CSV exportieren</h3>
+    <div class="export-panel" id="export-regionmarket" style="border-top:none; margin-top:0; padding-top:0;">
+      <input type="text" placeholder="Besitzer enthält..." data-param="owner">
+      <input type="text" placeholder="Welt enthält..." data-param="world">
+      <select data-param="sold">
+        <option value="">Alle</option>
+        <option value="true">Verkauft</option>
+        <option value="false">Verfuegbar</option>
+      </select>
+      <button onclick="exportCsv('export-regionmarket', '/api/regionmarket/export.csv')">CSV herunterladen</button>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Transaktionshistorie filtern / als CSV exportieren</h3>
+    <div class="sub" style="margin-bottom:8px;">Einzelne erkannte Verkaeufe/Ruecknahmen (nicht aggregiert), gefiltert als CSV.</div>
+    <div class="export-panel" id="export-regionmarket-tx" style="border-top:none; margin-top:0; padding-top:0;">
+      <input type="date" data-param="from" title="Von">
+      <input type="date" data-param="to" title="Bis">
+      <select data-param="type">
+        <option value="">Alle Typen</option>
+        <option value="SELL">Verkauf</option>
+        <option value="UNSELL">Ruecknahme</option>
+      </select>
+      <input type="text" placeholder="Spieler" data-param="player">
+      <input type="text" placeholder="Region" data-param="region">
+      <input type="number" placeholder="Min. Preis" data-param="minPrice">
+      <input type="number" placeholder="Max. Preis" data-param="maxPrice">
+      <button onclick="exportCsv('export-regionmarket-tx', '/api/regionmarket/transactions/export.csv')">CSV herunterladen</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="rmTotalRegions">-</div>
+      <div class="stat-label">Regionen insgesamt</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="rmSoldRegions">-</div>
+      <div class="stat-label">Verkauft / Verfuegbar</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="rmTotalSales">-</div>
+      <div class="stat-label">Erkannte Verkaeufe</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="rmSalesVolume">-</div>
+      <div class="stat-label">Umsatz aus Verkaeufen</div>
+    </div>
+  </div>
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <div class="table-toolbar">
+        <h3 style="margin:0;">Spieler nach Ausgaben</h3>
+        <div class="page-size-select">
+          Anzeigen:
+          <select id="ownerPageSize" onchange="renderOwners()">
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+            <option value="all">Alle</option>
+          </select>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Regionen</th><th style="text-align:right;">Kaeufe</th><th style="text-align:right;">Ausgegeben</th></tr></thead>
+        <tbody id="rmOwnerTable"></tbody>
+      </table>
+      <div class="sub count-hint" id="ownerCountHint"></div>
+    </div>
+    <div class="panel">
+      <div class="table-toolbar">
+        <h3 style="margin:0;">Alle Regionen</h3>
+        <div class="page-size-select">
+          Anzeigen:
+          <select id="regionPageSize" onchange="renderRegions()">
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+            <option value="all">Alle</option>
+          </select>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Region</th><th>Welt</th><th>Typ</th><th>Status</th><th style="text-align:right;">Preis</th></tr></thead>
+        <tbody id="rmRegionTable"></tbody>
+      </table>
+      <div class="sub count-hint" id="regionCountHint"></div>
+    </div>
+  </div>
+
+<script src="/app.js"></script>
+<script>
+let topOwners = [];
+let regions = [];
+
+function renderOwners() {
+  const size = pageSizeValue(document.getElementById('ownerPageSize'));
+  const shown = sliceForDisplay(topOwners, size);
+  const ownerBody = document.getElementById('rmOwnerTable');
+  ownerBody.innerHTML = '';
+  shown.forEach((o, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + o.owner + '</td><td style="text-align:right;">' + formatNumber(o.regionCount) +
+      '</td><td style="text-align:right;">' + formatNumber(o.purchases) + '</td><td style="text-align:right;">' + formatMoney(o.totalSpent) + '</td>';
+    ownerBody.appendChild(tr);
+  });
+  document.getElementById('ownerCountHint').textContent = shown.length + ' von ' + topOwners.length + ' Spielern angezeigt.';
+}
+
+function renderRegions() {
+  const size = pageSizeValue(document.getElementById('regionPageSize'));
+  const shown = sliceForDisplay(regions, size);
+  const regionBody = document.getElementById('rmRegionTable');
+  regionBody.innerHTML = '';
+  shown.forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + r.regionId + '</td><td>' + r.world + '</td><td>' + r.sellType +
+      '</td><td>' + (r.sold ? ('verkauft (' + r.owner + ')') : 'verfuegbar') +
+      '</td><td style="text-align:right;">' + formatPrice(r.price) + '</td>';
+    regionBody.appendChild(tr);
+  });
+  document.getElementById('regionCountHint').textContent = shown.length + ' von ' + regions.length + ' Regionen angezeigt.';
+}
+
+async function refreshRegionMarket() {
+  try {
+    const res = await fetch('/api/regionmarket/overview');
+    const data = await res.json();
+
+    document.getElementById('rmTotalRegions').textContent = formatNumber(data.totalRegions);
+    document.getElementById('rmSoldRegions').textContent = formatNumber(data.soldRegions) + ' / ' + formatNumber(data.availableRegions);
+    document.getElementById('rmTotalSales').textContent = formatNumber(data.totalSales);
+    document.getElementById('rmSalesVolume').textContent = formatMoney(data.totalSalesVolume);
+
+    topOwners = data.topOwners;
+    regions = data.regions;
+    renderOwners();
+    renderRegions();
+  } catch (e) {
+    console.error('Fehler beim Laden der AdvancedRegionMarket-Daten: ' + e);
+  }
+}
+
+refreshRegionMarket();
+setInterval(refreshRegionMarket, 30000);
+</script>
+</body>
+</html>

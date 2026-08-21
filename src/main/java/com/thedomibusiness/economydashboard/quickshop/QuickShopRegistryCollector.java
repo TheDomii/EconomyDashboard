@@ -19,7 +19,13 @@ public class QuickShopRegistryCollector {
         List<Shop> shops = QuickShopAPI.getInstance().getShopManager().getAllShops();
         for (Shop shop : shops) {
             try {
-                if (!shop.isValid()) {
+                // isValid() calls Location#getBlock() internally, which force-loads (and on
+                // an ungenerated world, force-generates) the shop's chunk - on the main thread
+                // that can stall the server when real shop data spans an unexplored world.
+                // isLoaded() is a plain cached flag QuickShop maintains via chunk load/unload
+                // events, so it never touches the chunk system: shops whose chunk isn't
+                // currently loaded are simply skipped for this poll instead of forcing a load.
+                if (!shop.isLoaded()) {
                     continue;
                 }
                 QUser owner = shop.getOwner();
@@ -39,8 +45,13 @@ public class QuickShopRegistryCollector {
 
     private String locationKey(Shop shop) {
         try {
-            org.bukkit.block.Block block = shop.getShopBlock();
-            return block.getWorld().getName() + ":" + block.getX() + ":" + block.getY() + ":" + block.getZ();
+            // Shop#getShopBlock() calls Location#getBlock(), which force-loads (and on an
+            // ungenerated world, force-generates) the chunk if it isn't already loaded - on
+            // the main thread that can stall the server for real-world shop data spread across
+            // an unexplored world. bukkitLocation() returns the shop's cached Location field
+            // directly, no chunk access needed.
+            org.bukkit.Location loc = shop.bukkitLocation();
+            return loc.getWorld().getName() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
         } catch (Exception e) {
             return String.valueOf(System.identityHashCode(shop));
         }

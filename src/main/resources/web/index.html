@@ -3,646 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <title>Server-Wirtschaft Dashboard</title>
-<style>
-  :root {
-    --bg: #0f1420;
-    --panel: #171e2e;
-    --border: #2a3348;
-    --text: #e8ecf4;
-    --muted: #8b95ab;
-    --accent: #4fd1a5;
-    --accent2: #6ea8fe;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    padding: 24px;
-  }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-  }
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px;
-  }
-  .stat-value { font-size: 28px; font-weight: 600; }
-  .stat-label { color: var(--muted); font-size: 13px; margin-top: 4px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 500; }
-  .bar-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
-  .bar-label { width: 90px; color: var(--muted); flex-shrink: 0; }
-  .bar-track { flex: 1; background: #1e2740; border-radius: 4px; overflow: hidden; height: 14px; }
-  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); }
-  .bar-count { width: 32px; text-align: right; flex-shrink: 0; }
-  .search-box {
-    width: 100%;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 16px;
-    color: var(--text);
-    font-size: 15px;
-    margin-bottom: 8px;
-  }
-  .search-box:focus { outline: 2px solid var(--accent2); }
-  .search-section { margin-top: 8px; }
-  .search-section h4 { margin: 12px 0 4px; color: var(--muted); font-weight: 500; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .empty-hint { color: var(--muted); font-size: 13px; padding: 4px 0; }
-  .export-panel {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid var(--border);
-  }
-  .export-panel input, .export-panel select {
-    background: #0f1420;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    padding: 6px 8px;
-    font-size: 13px;
-    max-width: 140px;
-  }
-  .export-panel button {
-    background: var(--accent);
-    border: none;
-    border-radius: 6px;
-    color: #0f1420;
-    font-weight: 600;
-    font-size: 13px;
-    padding: 7px 14px;
-    cursor: pointer;
-    margin-left: auto;
-  }
-  .export-panel button:hover { opacity: 0.9; }
-</style>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h1>Server-Wirtschaft Dashboard <a href="/logout" style="font-size:13px; color:var(--muted); float:right;">Abmelden</a></h1>
+  <nav class="top-nav">
+    <a href="/" class="active">Übersicht</a>
+    <a href="/economy.html">Wirtschaft</a>
+    <a href="/traders.html">Händler</a>
+    <a href="/towny.html">Towny</a>
+    <a href="/quickshops.html">QuickShops</a>
+    <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <span class="spacer"></span>
+    <a href="/logout" class="logout">Abmelden</a>
+  </nav>
+
+  <h1>Server-Wirtschaft Dashboard</h1>
   <div class="sub" id="updated">lade...</div>
 
   <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
   <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
 
-  <div class="grid">
-    <div class="panel">
-      <div class="stat-value" id="totalMoney">-</div>
-      <div class="stat-label">Geld im Umlauf (Summe aller Spielerkonten)</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="playerCount">-</div>
-      <div class="stat-label">Spieler mit Konto</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="avgMoney">-</div>
-      <div class="stat-label">Durchschnitt pro Spieler</div>
-    </div>
+  <div class="landing-links">
+    <a class="panel" href="/economy.html">
+      <div class="stat-value" id="lnkMoney">-</div>
+      <div class="stat-label">Geld im Umlauf &middot; Wirtschaft &rarr;</div>
+    </a>
+    <a class="panel" href="/traders.html">
+      <div class="stat-value" id="lnkTraders">-</div>
+      <div class="stat-label">Händler-Transaktionen &middot; dtlTradersPlus &rarr;</div>
+    </a>
+    <a class="panel" href="/towny.html">
+      <div class="stat-value" id="lnkTowny">-</div>
+      <div class="stat-label">Städte &middot; Towny &rarr;</div>
+    </a>
+    <a class="panel" href="/quickshops.html">
+      <div class="stat-value" id="lnkQuickShops">-</div>
+      <div class="stat-label">Bekannte Shops &middot; QuickShops &rarr;</div>
+    </a>
+    <a class="panel" href="/regionmarket.html">
+      <div class="stat-value" id="lnkRegionMarket">-</div>
+      <div class="stat-label">Regionen &middot; AdvancedRegionMarket &rarr;</div>
+    </a>
   </div>
 
-  <div class="grid" style="margin-top:16px;">
-    <div class="panel">
-      <h3 style="margin-top:0;">Verteilung nach Kontostand</h3>
-      <div id="distribution"></div>
-    </div>
-    <div class="panel">
-      <h3 style="margin-top:0;">Top 10 reichste Spieler</h3>
-      <table>
-        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Guthaben</th></tr></thead>
-        <tbody id="topTable"></tbody>
-      </table>
-      <div class="export-panel" id="export-players">
-        <input type="text" placeholder="Name enthält..." data-param="name">
-        <input type="number" placeholder="Min. Guthaben" data-param="minBalance">
-        <input type="number" placeholder="Max. Guthaben" data-param="maxBalance">
-        <button onclick="exportCsv('export-players', '/api/economy/export.csv')">CSV herunterladen</button>
-      </div>
-    </div>
-  </div>
-
-  <h2 style="margin-top:32px;">Händler (dtlTradersPlus)</h2>
-  <div class="sub">Einnahmen = Spieler kaufen vom Shop. Auszahlungen = Spieler verkaufen an den Shop. Netto = Einnahmen − Auszahlungen.</div>
-  <div class="grid">
-    <div class="panel">
-      <div class="stat-value" id="txCount">-</div>
-      <div class="stat-label">Transaktionen insgesamt (dauerhaft gespeichert)</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="txRevenue">-</div>
-      <div class="stat-label">Einnahmen (Käufe)</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="txPayouts">-</div>
-      <div class="stat-label">Auszahlungen (Verkäufe)</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="txNet">-</div>
-      <div class="stat-label">Netto</div>
-    </div>
-  </div>
-
-  <div class="grid" style="margin-top:16px;">
-    <div class="panel">
-      <h3 style="margin-top:0;">Top Shops nach Netto-Umsatz</h3>
-      <table>
-        <thead><tr><th>#</th><th>Shop</th><th style="text-align:right;">Transaktionen</th><th style="text-align:right;">Einnahmen</th><th style="text-align:right;">Auszahlungen</th><th style="text-align:right;">Netto</th></tr></thead>
-        <tbody id="shopTable"></tbody>
-      </table>
-    </div>
-    <div class="panel">
-      <h3 style="margin-top:0;">Meistgehandelte Items</h3>
-      <table>
-        <thead><tr><th>#</th><th>Item</th><th style="text-align:right;">Gekauft</th><th style="text-align:right;">Verkauft</th></tr></thead>
-        <tbody id="itemTable"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="panel" style="margin-top:16px;">
-    <h3 style="margin-top:0;">Aktuelle Preisliste (live aus den Shop-Configs)</h3>
-    <div class="sub" style="margin-bottom:8px;">Ankaufspreis = was ein Spieler beim Kauf zahlt. Verkaufspreis = was ein Spieler beim Verkauf an den Shop bekommt.</div>
-    <table>
-      <thead><tr><th>Shop</th><th>Seite</th><th>Item</th><th style="text-align:right;">Ankaufspreis</th><th style="text-align:right;">Verkaufspreis</th></tr></thead>
-      <tbody id="priceTable"></tbody>
-    </table>
-    <div class="export-panel" id="export-prices">
-      <input type="text" placeholder="Shop enthält..." data-param="shop">
-      <input type="text" placeholder="Item enthält..." data-param="item">
-      <button onclick="exportCsv('export-prices', '/api/traders/prices/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
-
-  <div class="panel" style="margin-top:16px;">
-    <h3 style="margin-top:0;">Händler-Transaktionshistorie exportieren</h3>
-    <div class="sub" style="margin-bottom:8px;">Einzelne Transaktionen (nicht aggregiert), gefiltert als CSV - für eigene Auswertungen, Excel, oder externe KI-Analyse.</div>
-    <div class="export-panel" id="export-trader-tx">
-      <input type="date" data-param="from" title="Von">
-      <input type="date" data-param="to" title="Bis">
-      <select data-param="type">
-        <option value="">Alle Typen</option>
-        <option value="BUY">Kauf</option>
-        <option value="SELL">Verkauf</option>
-        <option value="TRADE">Tausch</option>
-      </select>
-      <input type="text" placeholder="Spieler" data-param="player">
-      <input type="text" placeholder="Shop" data-param="shop">
-      <input type="text" placeholder="Item" data-param="item">
-      <input type="number" placeholder="Min. Preis" data-param="minPrice">
-      <input type="number" placeholder="Max. Preis" data-param="maxPrice">
-      <button onclick="exportCsv('export-trader-tx', '/api/traders/transactions/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
-
-  <h2 style="margin-top:32px;">Towny</h2>
-  <div class="sub" id="townyHint"></div>
-  <div class="grid">
-    <div class="panel">
-      <div class="stat-value" id="townCount">-</div>
-      <div class="stat-label">Städte insgesamt</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="townBalance">-</div>
-      <div class="stat-label">Gesamtvermögen aller Stadtkassen</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="newTowns">-</div>
-      <div class="stat-label">Neue Städte (24h / 7 Tage)</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="newPlots">-</div>
-      <div class="stat-label">Neue Plots gekauft (24h / 7 Tage)</div>
-    </div>
-  </div>
-  <div class="panel" style="margin-top:16px;">
-    <h3 style="margin-top:0;">Top Städte nach Kassenstand</h3>
-    <table>
-      <thead><tr><th>#</th><th>Stadt</th><th>Nation</th><th style="text-align:right;">Kasse</th><th style="text-align:right;">Plots</th></tr></thead>
-      <tbody id="townTable"></tbody>
-    </table>
-    <div class="export-panel" id="export-towns">
-      <input type="text" placeholder="Name enthält..." data-param="name">
-      <input type="number" placeholder="Min. Kasse" data-param="minBalance">
-      <button onclick="exportCsv('export-towns', '/api/towny/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
-
-  <h2 style="margin-top:32px;">QuickShops</h2>
-  <div class="sub">Registry wird direkt aus QuickShops eigener Shop-Liste gelesen (live, nicht nur aus Events).</div>
-  <div class="grid">
-    <div class="panel">
-      <div class="stat-value" id="qsShopCount">-</div>
-      <div class="stat-label">Bekannte QuickShops</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="qsTxCount">-</div>
-      <div class="stat-label">Transaktionen insgesamt</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="qsRevenue">-</div>
-      <div class="stat-label">Einnahmen (Käufe)</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="qsPayouts">-</div>
-      <div class="stat-label">Auszahlungen (Verkäufe)</div>
-    </div>
-  </div>
-  <div class="grid" style="margin-top:16px;">
-    <div class="panel">
-      <h3 style="margin-top:0;">Top Spieler nach Netto-Umsatz</h3>
-      <table>
-        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Shops</th><th style="text-align:right;">Tx</th><th style="text-align:right;">Netto</th></tr></thead>
-        <tbody id="qsOwnerTable"></tbody>
-      </table>
-    </div>
-    <div class="panel">
-      <h3 style="margin-top:0;">Alle QuickShops</h3>
-      <table>
-        <thead><tr><th>Besitzer</th><th>Item</th><th>Typ</th><th style="text-align:right;">Preis</th></tr></thead>
-        <tbody id="qsShopTable"></tbody>
-      </table>
-      <div class="export-panel" id="export-quickshops">
-        <input type="text" placeholder="Besitzer enthält..." data-param="owner">
-        <input type="text" placeholder="Item enthält..." data-param="item">
-        <button onclick="exportCsv('export-quickshops', '/api/quickshops/export.csv')">CSV herunterladen</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="panel" style="margin-top:16px;">
-    <h3 style="margin-top:0;">QuickShop-Transaktionshistorie exportieren</h3>
-    <div class="sub" style="margin-bottom:8px;">Einzelne Transaktionen (nicht aggregiert), gefiltert als CSV.</div>
-    <div class="export-panel" id="export-quickshop-tx">
-      <input type="date" data-param="from" title="Von">
-      <input type="date" data-param="to" title="Bis">
-      <select data-param="type">
-        <option value="">Alle Typen</option>
-        <option value="BUY">Kauf</option>
-        <option value="SELL">Verkauf</option>
-      </select>
-      <input type="text" placeholder="Spieler" data-param="player">
-      <input type="text" placeholder="Besitzer" data-param="owner">
-      <input type="text" placeholder="Item" data-param="item">
-      <input type="number" placeholder="Min. Preis" data-param="minPrice">
-      <input type="number" placeholder="Max. Preis" data-param="maxPrice">
-      <button onclick="exportCsv('export-quickshop-tx', '/api/quickshops/transactions/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
-
-  <h2 style="margin-top:32px;">AdvancedRegionMarket</h2>
-  <div class="sub">ARM hat kein zuverlaessiges "Region verkauft"-Event (PreBuyEvent feuert vor der eigentlichen Geld-/Besitzuebertragung) - Verkaeufe werden daher erkannt, indem der Sold-Status jeder Region bei jeder Aktualisierung mit dem vorherigen Stand verglichen wird. Zeitstempel = zuerst erkannt, nicht exakter Kaufzeitpunkt.</div>
-  <div class="grid">
-    <div class="panel">
-      <div class="stat-value" id="rmTotalRegions">-</div>
-      <div class="stat-label">Regionen insgesamt</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="rmSoldRegions">-</div>
-      <div class="stat-label">Verkauft / Verfuegbar</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="rmTotalSales">-</div>
-      <div class="stat-label">Erkannte Verkaeufe</div>
-    </div>
-    <div class="panel">
-      <div class="stat-value" id="rmSalesVolume">-</div>
-      <div class="stat-label">Umsatz aus Verkaeufen</div>
-    </div>
-  </div>
-  <div class="grid" style="margin-top:16px;">
-    <div class="panel">
-      <h3 style="margin-top:0;">Top Spieler nach Ausgaben</h3>
-      <table>
-        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Regionen</th><th style="text-align:right;">Kaeufe</th><th style="text-align:right;">Ausgegeben</th></tr></thead>
-        <tbody id="rmOwnerTable"></tbody>
-      </table>
-    </div>
-    <div class="panel">
-      <h3 style="margin-top:0;">Alle Regionen</h3>
-      <table>
-        <thead><tr><th>Region</th><th>Welt</th><th>Typ</th><th>Status</th><th style="text-align:right;">Preis</th></tr></thead>
-        <tbody id="rmRegionTable"></tbody>
-      </table>
-      <div class="export-panel" id="export-regionmarket">
-        <input type="text" placeholder="Besitzer enthält..." data-param="owner">
-        <input type="text" placeholder="Welt enthält..." data-param="world">
-        <select data-param="sold">
-          <option value="">Alle</option>
-          <option value="true">Verkauft</option>
-          <option value="false">Verfuegbar</option>
-        </select>
-        <button onclick="exportCsv('export-regionmarket', '/api/regionmarket/export.csv')">CSV herunterladen</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="panel" style="margin-top:16px;">
-    <h3 style="margin-top:0;">Region-Transaktionshistorie exportieren</h3>
-    <div class="sub" style="margin-bottom:8px;">Einzelne erkannte Verkaeufe/Ruecknahmen (nicht aggregiert), gefiltert als CSV.</div>
-    <div class="export-panel" id="export-regionmarket-tx">
-      <input type="date" data-param="from" title="Von">
-      <input type="date" data-param="to" title="Bis">
-      <select data-param="type">
-        <option value="">Alle Typen</option>
-        <option value="SELL">Verkauf</option>
-        <option value="UNSELL">Ruecknahme</option>
-      </select>
-      <input type="text" placeholder="Spieler" data-param="player">
-      <input type="text" placeholder="Region" data-param="region">
-      <input type="number" placeholder="Min. Preis" data-param="minPrice">
-      <input type="number" placeholder="Max. Preis" data-param="maxPrice">
-      <button onclick="exportCsv('export-regionmarket-tx', '/api/regionmarket/transactions/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
-
+<script src="/app.js"></script>
 <script>
-function formatMoney(n) {
-  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(n);
-}
-
-function formatPrice(n) {
-  return n === null || n === undefined ? '-' : new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function exportCsv(panelId, endpoint) {
-  const panel = document.getElementById(panelId);
-  const inputs = panel.querySelectorAll('[data-param]');
-  const params = new URLSearchParams();
-  inputs.forEach((inp) => {
-    if (inp.value) {
-      params.set(inp.dataset.param, inp.value);
-    }
-  });
-  const qs = params.toString();
-  window.location.href = endpoint + (qs ? '?' + qs : '');
-}
-
-async function refresh() {
+async function refreshOverview() {
   try {
-    const res = await fetch('/api/economy/overview');
-    const data = await res.json();
+    const [economy, traders, towny, quickshops, regionmarket] = await Promise.all([
+      fetch('/api/economy/overview').then(r => r.json()),
+      fetch('/api/traders/overview').then(r => r.json()),
+      fetch('/api/towny/overview').then(r => r.json()),
+      fetch('/api/quickshops/overview').then(r => r.json()),
+      fetch('/api/regionmarket/overview').then(r => r.json())
+    ]);
 
     document.getElementById('updated').textContent =
-      'Stand: ' + new Date(data.generatedAtMillis).toLocaleString('de-DE');
-    document.getElementById('totalMoney').textContent = formatMoney(data.totalMoney);
-    document.getElementById('playerCount').textContent = data.playerCount;
-    document.getElementById('avgMoney').textContent =
-      data.playerCount > 0 ? formatMoney(data.totalMoney / data.playerCount) : '0';
-
-    const distEl = document.getElementById('distribution');
-    distEl.innerHTML = '';
-    const maxCount = Math.max(1, ...Object.values(data.distribution));
-    for (const [label, count] of Object.entries(data.distribution)) {
-      const row = document.createElement('div');
-      row.className = 'bar-row';
-      row.innerHTML =
-        '<div class="bar-label">' + label + '</div>' +
-        '<div class="bar-track"><div class="bar-fill" style="width:' + (count / maxCount * 100) + '%"></div></div>' +
-        '<div class="bar-count">' + count + '</div>';
-      distEl.appendChild(row);
-    }
-
-    const tbody = document.getElementById('topTable');
-    tbody.innerHTML = '';
-    data.topBalances.forEach((p, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + p.name + '</td><td style="text-align:right;">' + formatMoney(p.balance) + '</td>';
-      tbody.appendChild(tr);
-    });
+      'Stand: ' + new Date(economy.generatedAtMillis).toLocaleString('de-DE');
+    document.getElementById('lnkMoney').textContent = formatMoney(economy.totalMoney);
+    document.getElementById('lnkTraders').textContent = formatNumber(traders.totalTransactions);
+    document.getElementById('lnkTowny').textContent = formatNumber(towny.totalTowns);
+    document.getElementById('lnkQuickShops').textContent = formatNumber(quickshops.totalShops);
+    document.getElementById('lnkRegionMarket').textContent = formatNumber(regionmarket.totalRegions);
   } catch (e) {
     document.getElementById('updated').textContent = 'Fehler beim Laden: ' + e;
   }
 }
 
-async function refreshTraders() {
-  try {
-    const res = await fetch('/api/traders/overview');
-    const data = await res.json();
-
-    document.getElementById('txCount').textContent = data.totalTransactions;
-    document.getElementById('txRevenue').textContent = formatMoney(data.totalRevenue);
-    document.getElementById('txPayouts').textContent = formatMoney(data.totalPayouts);
-    document.getElementById('txNet').textContent = formatMoney(data.totalNet);
-
-    const shopBody = document.getElementById('shopTable');
-    shopBody.innerHTML = '';
-    data.topShops.forEach((s, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + s.name + '</td><td style="text-align:right;">' + s.transactions +
-        '</td><td style="text-align:right;">' + formatMoney(s.revenue) +
-        '</td><td style="text-align:right;">' + formatMoney(s.payouts) +
-        '</td><td style="text-align:right;">' + formatMoney(s.net) + '</td>';
-      shopBody.appendChild(tr);
-    });
-
-    const itemBody = document.getElementById('itemTable');
-    itemBody.innerHTML = '';
-    data.topItems.forEach((it, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + it.name + '</td><td style="text-align:right;">' + it.boughtQty +
-        '</td><td style="text-align:right;">' + it.soldQty + '</td>';
-      itemBody.appendChild(tr);
-    });
-  } catch (e) {
-    console.error('Fehler beim Laden der Haendlerdaten: ' + e);
-  }
-}
-
-async function refreshPrices() {
-  try {
-    const res = await fetch('/api/traders/prices');
-    const data = await res.json();
-    data.sort((a, b) => (a.shop + a.page + a.item).localeCompare(b.shop + b.page + b.item));
-
-    const body = document.getElementById('priceTable');
-    body.innerHTML = '';
-    data.forEach((p) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + p.shop + '</td><td>' + p.page + '</td><td>' + p.item +
-        '</td><td style="text-align:right;">' + formatPrice(p.buyPrice) +
-        '</td><td style="text-align:right;">' + formatPrice(p.sellPrice) + '</td>';
-      body.appendChild(tr);
-    });
-  } catch (e) {
-    console.error('Fehler beim Laden der Preisliste: ' + e);
-  }
-}
-
-async function refreshTowny() {
-  try {
-    const res = await fetch('/api/towny/overview');
-    const data = await res.json();
-
-    document.getElementById('townyHint').textContent =
-      data.totalTowns === 0 ? 'Kein Towny gefunden oder noch keine Staedte gegruendet.' : '';
-    document.getElementById('townCount').textContent = data.totalTowns;
-    document.getElementById('townBalance').textContent = formatMoney(data.totalTownBalance);
-    document.getElementById('newTowns').textContent = data.newTownsLast24h + ' / ' + data.newTownsLast7d;
-    document.getElementById('newPlots').textContent = data.newPlotsLast24h + ' / ' + data.newPlotsLast7d;
-
-    const body = document.getElementById('townTable');
-    body.innerHTML = '';
-    data.topTowns.forEach((t, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + t.name + '</td><td>' + (t.nation || '-') +
-        '</td><td style="text-align:right;">' + formatMoney(t.balance) +
-        '</td><td style="text-align:right;">' + t.plots + '</td>';
-      body.appendChild(tr);
-    });
-  } catch (e) {
-    console.error('Fehler beim Laden der Towny-Daten: ' + e);
-  }
-}
-
-async function refreshQuickShops() {
-  try {
-    const res = await fetch('/api/quickshops/overview');
-    const data = await res.json();
-
-    document.getElementById('qsShopCount').textContent = data.totalShops;
-    document.getElementById('qsTxCount').textContent = data.totalTransactions;
-    document.getElementById('qsRevenue').textContent = formatMoney(data.totalRevenue);
-    document.getElementById('qsPayouts').textContent = formatMoney(data.totalPayouts);
-
-    const ownerBody = document.getElementById('qsOwnerTable');
-    ownerBody.innerHTML = '';
-    data.topOwners.forEach((o, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + o.owner + '</td><td style="text-align:right;">' + o.shopCount +
-        '</td><td style="text-align:right;">' + o.transactions + '</td><td style="text-align:right;">' + formatMoney(o.net) + '</td>';
-      ownerBody.appendChild(tr);
-    });
-
-    const shopBody = document.getElementById('qsShopTable');
-    shopBody.innerHTML = '';
-    data.shops.forEach((s) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + s.owner + '</td><td>' + s.item + '</td><td>' + (s.shopBuys ? 'kauft an' : 'verkauft') +
-        '</td><td style="text-align:right;">' + formatPrice(s.price) + '</td>';
-      shopBody.appendChild(tr);
-    });
-  } catch (e) {
-    console.error('Fehler beim Laden der QuickShop-Daten: ' + e);
-  }
-}
-
-async function refreshRegionMarket() {
-  try {
-    const res = await fetch('/api/regionmarket/overview');
-    const data = await res.json();
-
-    document.getElementById('rmTotalRegions').textContent = data.totalRegions;
-    document.getElementById('rmSoldRegions').textContent = data.soldRegions + ' / ' + data.availableRegions;
-    document.getElementById('rmTotalSales').textContent = data.totalSales;
-    document.getElementById('rmSalesVolume').textContent = formatMoney(data.totalSalesVolume);
-
-    const ownerBody = document.getElementById('rmOwnerTable');
-    ownerBody.innerHTML = '';
-    data.topOwners.forEach((o, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + o.owner + '</td><td style="text-align:right;">' + o.regionCount +
-        '</td><td style="text-align:right;">' + o.purchases + '</td><td style="text-align:right;">' + formatMoney(o.totalSpent) + '</td>';
-      ownerBody.appendChild(tr);
-    });
-
-    const regionBody = document.getElementById('rmRegionTable');
-    regionBody.innerHTML = '';
-    data.regions.forEach((r) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + r.regionId + '</td><td>' + r.world + '</td><td>' + r.sellType +
-        '</td><td>' + (r.sold ? ('verkauft (' + r.owner + ')') : 'verfuegbar') +
-        '</td><td style="text-align:right;">' + formatPrice(r.price) + '</td>';
-      regionBody.appendChild(tr);
-    });
-  } catch (e) {
-    console.error('Fehler beim Laden der AdvancedRegionMarket-Daten: ' + e);
-  }
-}
-
-let searchDebounce = null;
-document.getElementById('searchInput').addEventListener('input', (e) => {
-  clearTimeout(searchDebounce);
-  const query = e.target.value.trim();
-  const resultsEl = document.getElementById('searchResults');
-  if (query.length < 2) {
-    resultsEl.style.display = 'none';
-    return;
-  }
-  searchDebounce = setTimeout(() => runSearch(query), 250);
-});
-
-async function runSearch(query) {
-  const resultsEl = document.getElementById('searchResults');
-  try {
-    const res = await fetch('/api/search?q=' + encodeURIComponent(query));
-    const data = await res.json();
-
-    let html = '';
-
-    html += '<div class="search-section"><h4>Spieler</h4>';
-    html += data.players.length ? data.players.map(p =>
-      '<div class="bar-row"><div style="flex:1;">' + p.name + '</div><div>' + formatMoney(p.balance) + '</div></div>'
-    ).join('') : '<div class="empty-hint">keine Treffer</div>';
-    html += '</div>';
-
-    html += '<div class="search-section"><h4>Shops</h4>';
-    html += data.shops.length ? data.shops.map(s =>
-      '<div class="bar-row"><div style="flex:1;">' + s.name + '</div><div>' + s.transactions + ' Tx, Netto ' + formatMoney(s.net) + '</div></div>'
-    ).join('') : '<div class="empty-hint">keine Treffer</div>';
-    html += '</div>';
-
-    html += '<div class="search-section"><h4>Items</h4>';
-    html += data.items.length ? data.items.map(it =>
-      '<div class="bar-row"><div style="flex:1;">' + it.name + '</div><div>Kauf: ' + formatPrice(it.buyPrice) +
-      ' | Verkauf: ' + formatPrice(it.sellPrice) + ' | Historie: ' + it.boughtQty + '/' + it.soldQty + '</div></div>'
-    ).join('') : '<div class="empty-hint">keine Treffer</div>';
-    html += '</div>';
-
-    html += '<div class="search-section"><h4>QuickShops</h4>';
-    html += data.quickShops.length ? data.quickShops.map(s =>
-      '<div class="bar-row"><div style="flex:1;">' + s.owner + ' - ' + s.item + '</div><div>' +
-      (s.shopBuys ? 'kauft an' : 'verkauft') + ': ' + formatPrice(s.price) + '</div></div>'
-    ).join('') : '<div class="empty-hint">keine Treffer</div>';
-    html += '</div>';
-
-    html += '<div class="search-section"><h4>Regionen</h4>';
-    html += data.regions.length ? data.regions.map(r =>
-      '<div class="bar-row"><div style="flex:1;">' + r.regionId + ' (' + r.world + ')</div><div>' +
-      (r.sold ? ('verkauft an ' + r.owner) : 'verfuegbar') + ': ' + formatPrice(r.price) + '</div></div>'
-    ).join('') : '<div class="empty-hint">keine Treffer</div>';
-    html += '</div>';
-
-    resultsEl.innerHTML = html;
-    resultsEl.style.display = 'block';
-  } catch (e) {
-    resultsEl.innerHTML = '<div class="empty-hint">Fehler bei der Suche: ' + e + '</div>';
-    resultsEl.style.display = 'block';
-  }
-}
-
-refresh();
-refreshTraders();
-refreshPrices();
-refreshTowny();
-refreshQuickShops();
-refreshRegionMarket();
-setInterval(refresh, 30000);
-setInterval(refreshTraders, 30000);
-setInterval(refreshPrices, 30000);
-setInterval(refreshTowny, 30000);
-setInterval(refreshQuickShops, 30000);
-setInterval(refreshRegionMarket, 30000);
+refreshOverview();
+setInterval(refreshOverview, 30000);
 </script>
 </body>
 </html>

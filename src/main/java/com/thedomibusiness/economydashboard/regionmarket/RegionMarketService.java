@@ -12,7 +12,7 @@ import java.util.logging.Level;
 public class RegionMarketService {
 
     private static final int REGION_LIST_LIMIT = 500;
-    private static final int TOP_OWNERS_LIMIT = 10;
+    private static final int TOP_OWNERS_LIMIT = 500;
 
     private final Plugin plugin;
     private final RegionMarketDatabase db;

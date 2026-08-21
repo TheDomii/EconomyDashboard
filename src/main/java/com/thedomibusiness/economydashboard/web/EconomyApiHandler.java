@@ -46,6 +46,15 @@ public class EconomyApiHandler implements HttpHandler {
         }
         sb.append("],");
 
+        sb.append("\"allBalances\":[");
+        int allLimit = Math.min(snapshot.allBalances.size(), 2000);
+        for (int i = 0; i < allLimit; i++) {
+            EconomySnapshot.PlayerBalance b = snapshot.allBalances.get(i);
+            if (i > 0) sb.append(",");
+            sb.append("{\"name\":\"").append(escape(b.name)).append("\",\"balance\":").append(format(b.balance)).append("}");
+        }
+        sb.append("],");
+
         sb.append("\"distribution\":{");
         boolean first = true;
         for (Map.Entry<String, Integer> entry : snapshot.distribution.entrySet()) {

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Händler - Server-Wirtschaft Dashboard</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="/">Übersicht</a>
+    <a href="/economy.html">Wirtschaft</a>
+    <a href="/traders.html" class="active">Händler</a>
+    <a href="/towny.html">Towny</a>
+    <a href="/quickshops.html">QuickShops</a>
+    <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <span class="spacer"></span>
+    <a href="/logout" class="logout">Abmelden</a>
+  </nav>
+
+  <h1>Händler (dtlTradersPlus)</h1>
+  <div class="sub" id="updated">Einnahmen = Spieler kaufen vom Shop. Auszahlungen = Spieler verkaufen an den Shop. Netto = Einnahmen − Auszahlungen.</div>
+
+  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
+  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Preisliste filtern / als CSV exportieren</h3>
+    <div class="export-panel" id="export-prices" style="border-top:none; margin-top:0; padding-top:0;">
+      <input type="text" placeholder="Shop enthält..." data-param="shop">
+      <input type="text" placeholder="Item enthält..." data-param="item">
+      <button onclick="exportCsv('export-prices', '/api/traders/prices/export.csv')">CSV herunterladen</button>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Transaktionshistorie filtern / als CSV exportieren</h3>
+    <div class="sub" style="margin-bottom:8px;">Einzelne Transaktionen (nicht aggregiert) - für eigene Auswertungen, Excel, oder externe KI-Analyse.</div>
+    <div class="export-panel" id="export-trader-tx" style="border-top:none; margin-top:0; padding-top:0;">
+      <input type="date" data-param="from" title="Von">
+      <input type="date" data-param="to" title="Bis">
+      <select data-param="type">
+        <option value="">Alle Typen</option>
+        <option value="BUY">Kauf</option>
+        <option value="SELL">Verkauf</option>
+        <option value="TRADE">Tausch</option>
+      </select>
+      <input type="text" placeholder="Spieler" data-param="player">
+      <input type="text" placeholder="Shop" data-param="shop">
+      <input type="text" placeholder="Item" data-param="item">
+      <input type="number" placeholder="Min. Preis" data-param="minPrice">
+      <input type="number" placeholder="Max. Preis" data-param="maxPrice">
+      <button onclick="exportCsv('export-trader-tx', '/api/traders/transactions/export.csv')">CSV herunterladen</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="txCount">-</div>
+      <div class="stat-label">Transaktionen insgesamt (dauerhaft gespeichert)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="txRevenue">-</div>
+      <div class="stat-label">Einnahmen (Käufe)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="txPayouts">-</div>
+      <div class="stat-label">Auszahlungen (Verkäufe)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="txNet">-</div>
+      <div class="stat-label">Netto</div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <div class="table-toolbar">
+        <h3 style="margin:0;">Shops nach Netto-Umsatz</h3>
+        <div class="page-size-select">
+          Anzeigen:
+          <select id="shopPageSize" onchange="renderShops()">
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+            <option value="all">Alle</option>
+          </select>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>#</th><th>Shop</th><th style="text-align:right;">Transaktionen</th><th style="text-align:right;">Einnahmen</th><th style="text-align:right;">Auszahlungen</th><th style="text-align:right;">Netto</th></tr></thead>
+        <tbody id="shopTable"></tbody>
+      </table>
+      <div class="sub count-hint" id="shopCountHint"></div>
+    </div>
+    <div class="panel">
+      <div class="table-toolbar">
+        <h3 style="margin:0;">Meistgehandelte Items</h3>
+        <div class="page-size-select">
+          Anzeigen:
+          <select id="itemPageSize" onchange="renderItems()">
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+            <option value="all">Alle</option>
+          </select>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>#</th><th>Item</th><th style="text-align:right;">Gekauft</th><th style="text-align:right;">Verkauft</th></tr></thead>
+        <tbody id="itemTable"></tbody>
+      </table>
+      <div class="sub count-hint" id="itemCountHint"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <div class="table-toolbar">
+      <h3 style="margin:0;">Aktuelle Preisliste (live aus den Shop-Configs)</h3>
+      <div class="page-size-select">
+        Anzeigen:
+        <select id="pricePageSize" onchange="renderPrices()">
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="250">250</option>
+          <option value="all">Alle</option>
+        </select>
+      </div>
+    </div>
+    <div class="sub" style="margin-bottom:8px;">Ankaufspreis = was ein Spieler beim Kauf zahlt. Verkaufspreis = was ein Spieler beim Verkauf an den Shop bekommt.</div>
+    <table>
+      <thead><tr><th>Shop</th><th>Seite</th><th>Item</th><th style="text-align:right;">Ankaufspreis</th><th style="text-align:right;">Verkaufspreis</th></tr></thead>
+      <tbody id="priceTable"></tbody>
+    </table>
+    <div class="sub count-hint" id="priceCountHint"></div>
+  </div>
+
+<script src="/app.js"></script>
+<script>
+let topShops = [];
+let topItems = [];
+let prices = [];
+
+function renderShops() {
+  const size = pageSizeValue(document.getElementById('shopPageSize'));
+  const shown = sliceForDisplay(topShops, size);
+  const shopBody = document.getElementById('shopTable');
+  shopBody.innerHTML = '';
+  shown.forEach((s, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + s.name + '</td><td style="text-align:right;">' + formatNumber(s.transactions) +
+      '</td><td style="text-align:right;">' + formatMoney(s.revenue) +
+      '</td><td style="text-align:right;">' + formatMoney(s.payouts) +
+      '</td><td style="text-align:right;">' + formatMoney(s.net) + '</td>';
+    shopBody.appendChild(tr);
+  });
+  document.getElementById('shopCountHint').textContent = shown.length + ' von ' + topShops.length + ' Shops angezeigt.';
+}
+
+function renderItems() {
+  const size = pageSizeValue(document.getElementById('itemPageSize'));
+  const shown = sliceForDisplay(topItems, size);
+  const itemBody = document.getElementById('itemTable');
+  itemBody.innerHTML = '';
+  shown.forEach((it, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + it.name + '</td><td style="text-align:right;">' + formatNumber(it.boughtQty) +
+      '</td><td style="text-align:right;">' + formatNumber(it.soldQty) + '</td>';
+    itemBody.appendChild(tr);
+  });
+  document.getElementById('itemCountHint').textContent = shown.length + ' von ' + topItems.length + ' Items angezeigt.';
+}
+
+function renderPrices() {
+  const size = pageSizeValue(document.getElementById('pricePageSize'));
+  const shown = sliceForDisplay(prices, size);
+  const body = document.getElementById('priceTable');
+  body.innerHTML = '';
+  shown.forEach((p) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + p.shop + '</td><td>' + p.page + '</td><td>' + p.item +
+      '</td><td style="text-align:right;">' + formatPrice(p.buyPrice) +
+      '</td><td style="text-align:right;">' + formatPrice(p.sellPrice) + '</td>';
+    body.appendChild(tr);
+  });
+  document.getElementById('priceCountHint').textContent = shown.length + ' von ' + prices.length + ' Preiseinträgen angezeigt.';
+}
+
+async function refreshTraders() {
+  try {
+    const res = await fetch('/api/traders/overview');
+    const data = await res.json();
+
+    document.getElementById('txCount').textContent = formatNumber(data.totalTransactions);
+    document.getElementById('txRevenue').textContent = formatMoney(data.totalRevenue);
+    document.getElementById('txPayouts').textContent = formatMoney(data.totalPayouts);
+    document.getElementById('txNet').textContent = formatMoney(data.totalNet);
+
+    topShops = data.topShops;
+    topItems = data.topItems;
+    renderShops();
+    renderItems();
+  } catch (e) {
+    console.error('Fehler beim Laden der Haendlerdaten: ' + e);
+  }
+}
+
+async function refreshPrices() {
+  try {
+    const res = await fetch('/api/traders/prices');
+    const data = await res.json();
+    data.sort((a, b) => (a.shop + a.page + a.item).localeCompare(b.shop + b.page + b.item));
+    prices = data;
+    renderPrices();
+  } catch (e) {
+    console.error('Fehler beim Laden der Preisliste: ' + e);
+  }
+}
+
+refreshTraders();
+refreshPrices();
+setInterval(refreshTraders, 30000);
+setInterval(refreshPrices, 30000);
+</script>
+</body>
+</html>

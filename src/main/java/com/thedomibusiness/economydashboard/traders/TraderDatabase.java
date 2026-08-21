@@ -84,7 +84,7 @@ public class TraderDatabase implements AutoCloseable {
         try (PreparedStatement ps = connection.prepareStatement(
                 "INSERT INTO transactions(timestamp_millis, type, player, shop, page, item_name, item_amount, price) " +
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
-            ps.setLong(1, System.currentTimeMillis());
+            ps.setLong(1, tx.timestampMillis);
             ps.setString(2, tx.type.name());
             ps.setString(3, tx.player);
             ps.setString(4, tx.shop);
@@ -126,7 +126,7 @@ public class TraderDatabase implements AutoCloseable {
                      "SELECT shop, COUNT(*), " +
                              "COALESCE(SUM(CASE WHEN type = 'BUY' THEN price ELSE 0 END), 0) AS revenue, " +
                              "COALESCE(SUM(CASE WHEN type = 'SELL' THEN price ELSE 0 END), 0) AS payouts " +
-                             "FROM transactions GROUP BY shop ORDER BY (revenue - payouts) DESC LIMIT 10")) {
+                             "FROM transactions GROUP BY shop ORDER BY (revenue - payouts) DESC LIMIT 500")) {
             while (rs.next()) {
                 shops.add(new TraderSnapshot.ShopStats(rs.getString(1), rs.getInt(2), rs.getDouble(3), rs.getDouble(4)));
             }
@@ -139,7 +139,7 @@ public class TraderDatabase implements AutoCloseable {
                              "COALESCE(SUM(CASE WHEN type = 'BUY' THEN item_amount ELSE 0 END), 0) AS bought, " +
                              "COALESCE(SUM(CASE WHEN type = 'SELL' THEN item_amount ELSE 0 END), 0) AS sold " +
                              "FROM transactions WHERE item_name IS NOT NULL " +
-                             "GROUP BY item_name ORDER BY (bought + sold) DESC LIMIT 10")) {
+                             "GROUP BY item_name ORDER BY (bought + sold) DESC LIMIT 500")) {
             while (rs.next()) {
                 items.add(new TraderSnapshot.ItemStats(rs.getString(1), rs.getInt(2), rs.getInt(3)));
             }

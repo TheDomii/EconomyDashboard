@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Towny - Server-Wirtschaft Dashboard</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="/">Übersicht</a>
+    <a href="/economy.html">Wirtschaft</a>
+    <a href="/traders.html">Händler</a>
+    <a href="/towny.html" class="active">Towny</a>
+    <a href="/quickshops.html">QuickShops</a>
+    <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <span class="spacer"></span>
+    <a href="/logout" class="logout">Abmelden</a>
+  </nav>
+
+  <h1>Towny</h1>
+  <div class="sub" id="townyHint">lade...</div>
+
+  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
+  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Städte filtern / als CSV exportieren</h3>
+    <div class="export-panel" id="export-towns" style="border-top:none; margin-top:0; padding-top:0;">
+      <input type="text" placeholder="Name enthält..." data-param="name">
+      <input type="number" placeholder="Min. Kasse" data-param="minBalance">
+      <button onclick="exportCsv('export-towns', '/api/towny/export.csv')">CSV herunterladen</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="townCount">-</div>
+      <div class="stat-label">Städte insgesamt</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="townBalance">-</div>
+      <div class="stat-label">Gesamtvermögen aller Stadtkassen</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="newTowns">-</div>
+      <div class="stat-label">Neue Städte (24h / 7 Tage)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="newPlots">-</div>
+      <div class="stat-label">Neue Plots gekauft (24h / 7 Tage)</div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:16px;">
+    <div class="table-toolbar">
+      <h3 style="margin:0;">Städte nach Kassenstand</h3>
+      <div class="page-size-select">
+        Anzeigen:
+        <select id="pageSize" onchange="renderTable()">
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="250">250</option>
+          <option value="all">Alle</option>
+        </select>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Stadt</th><th>Nation</th><th style="text-align:right;">Kasse</th><th style="text-align:right;">Plots</th></tr></thead>
+      <tbody id="townTable"></tbody>
+    </table>
+    <div class="sub count-hint" id="countHint"></div>
+  </div>
+
+<script src="/app.js"></script>
+<script>
+let allTowns = [];
+
+function renderTable() {
+  const size = pageSizeValue(document.getElementById('pageSize'));
+  const shown = sliceForDisplay(allTowns, size);
+  const body = document.getElementById('townTable');
+  body.innerHTML = '';
+  shown.forEach((t, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + t.name + '</td><td>' + (t.nation || '-') +
+      '</td><td style="text-align:right;">' + formatMoney(t.balance) +
+      '</td><td style="text-align:right;">' + formatNumber(t.plots) + '</td>';
+    body.appendChild(tr);
+  });
+  document.getElementById('countHint').textContent = shown.length + ' von ' + allTowns.length + ' Städten angezeigt.';
+}
+
+async function refreshTowny() {
+  try {
+    const res = await fetch('/api/towny/overview');
+    const data = await res.json();
+
+    document.getElementById('townyHint').textContent =
+      data.totalTowns === 0 ? 'Kein Towny gefunden oder noch keine Staedte gegruendet.' : 'Stand: ' + new Date(data.generatedAtMillis).toLocaleString('de-DE');
+    document.getElementById('townCount').textContent = formatNumber(data.totalTowns);
+    document.getElementById('townBalance').textContent = formatMoney(data.totalTownBalance);
+    document.getElementById('newTowns').textContent = formatNumber(data.newTownsLast24h) + ' / ' + formatNumber(data.newTownsLast7d);
+    document.getElementById('newPlots').textContent = formatNumber(data.newPlotsLast24h) + ' / ' + formatNumber(data.newPlotsLast7d);
+
+    allTowns = data.allTowns;
+    renderTable();
+  } catch (e) {
+    console.error('Fehler beim Laden der Towny-Daten: ' + e);
+  }
+}
+
+refreshTowny();
+setInterval(refreshTowny, 30000);
+</script>
+</body>
+</html>

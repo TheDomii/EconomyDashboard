@@ -32,6 +32,12 @@ QuickShop-Hikari + AdvancedRegionMarket): **Geldmenge & Verteilung**,
   erkannte Verkäufe, Umsatz, Top-Käufer nach Ausgaben.
 - Live-Suche über Spieler, Shops (dtlTradersPlus), Items, QuickShops und
   AdvancedRegionMarket-Regionen (min. 2 Zeichen).
+- Jedes Modul hat seine eigene Unterseite (`/economy.html`, `/traders.html`,
+  `/towny.html`, `/quickshops.html`, `/regionmarket.html`) statt einer einzigen
+  langen Seite; `/` ist eine Übersicht mit Links zu allen Modulen. Große Tabellen
+  haben einen "Anzeigen"-Regler (50/100/250/Alle) statt alles auf einmal zu laden.
+  Zahlen werden überall mit Tausendertrennzeichen dargestellt (`de-DE`-Format,
+  z.B. `1.234.567`).
 - **CSV-Export mit Filtern** für jeden Datenbereich (Spieler, Preisliste, Städte,
   QuickShop-Registry, AdvancedRegionMarket-Registry) sowie separat für die
   vollständige, ungefilterte Transaktionshistorie von dtlTradersPlus, QuickShop
@@ -122,6 +128,62 @@ wirklich Daten liefert.
   Kauf-Hook und feuert synchron *vor* `setSold()`/dem eigentlichen Geldtransfer
   in `Region#buy()` - abbrechbar, also kein Erfolgssignal. Deshalb Registry-
   Spiegelung + Sold-Status-Diff wie bei Towny/QuickShop, nur ohne Event-Anteil.
+
+## Test mit echten Produktionsdaten
+
+Zusätzlich zum synthetischen Testserver wurde ein echter Datenexport eines
+Produktionsservers importiert (89 dtlTradersPlus-Shops, 5.556 Log-Dateien,
+316.198 Transaktionen, echte QuickShop- und TheNewEconomy-Datenbanken). Dabei
+wurden mehrere echte Bugs gefunden und gefixt:
+
+- **dtlTradersPlus-Zeitstempel wurden verworfen**: `DtlLogParser` hat den
+  Zeitstempel jeder Log-Zeile (`[TT/MM/JJJJ hh:mm:ss]`) zwar per Regex erfasst,
+  aber nie weitergereicht - `TraderDatabase#insertTransaction` hat stattdessen
+  `System.currentTimeMillis()` (Importzeitpunkt) gespeichert. Dadurch lieferte
+  der `from`/`to`-Datumsfilter auf echten historischen Daten (2023/2024) keine
+  Treffer. Gefixt: `Transaction` trägt jetzt den geparsten Zeitstempel
+  (`LocalDateTime` im Serverzeitzone-Kontext), durchgereicht bis in die DB.
+  Nach dem Fix lieferte `from=2023-09-01&to=2023-09-30` korrekt historische
+  Zeilen.
+- **Spielernamen enthielten rohe Formatierungscodes**: dtlTradersPlus loggt den
+  formatierten Anzeigenamen inkl. LuckPerms-Rang-Präfix, z.B.
+  `§a[Spieler]Steve§r` statt `Steve` - macht Namensfilter/CSV-Export für externe
+  Tools praktisch unbrauchbar. `DtlLogParser` entfernt jetzt Minecraft-
+  Farbcodes (`§[0-9a-fk-or]`) und einen führenden `[Rang]`-Präfix.
+- **QuickShop-Registry konnte den Server einfrieren**: `QuickShopRegistryCollector`
+  rief `Shop#getShopBlock()` (→ `Location#getBlock()`) und `Shop#isValid()` auf,
+  beide laden/generieren synchron den Chunk der Shop-Position, falls nicht
+  geladen. Bei echten Shop-Daten über eine nicht vollständig erkundete Welt hat
+  das den Hauptthread wiederholt für >10s blockiert (Paper-Watchdog-Abstürze).
+  Gefixt: `Shop#bukkitLocation()` (reines `Location`-Feld, kein Chunk-Zugriff)
+  statt `getShopBlock()`, und `Shop#isLoaded()` (gecachtes Flag) statt
+  `isValid()` - Shops in aktuell ungeladenen Chunks werden für den jeweiligen
+  Poll einfach übersprungen statt einen Chunk-Load zu erzwingen.
+- **TheNewEconomy-Konfigurationsdatei war fehlerhaft**: die importierte
+  `TheNewEconomy/config.yml` hatte einen fehlenden Leerzeichen-Fehler
+  (`Symbol:" Taler"` statt `Symbol: " Taler"`), was TNE komplett am Start
+  hinderte - das reißt über die harte Vault-Abhängigkeit das gesamte
+  EconomyDashboard-Plugin mit (kein Bug in diesem Plugin, aber ein Beispiel
+  dafür, dass eine einzige kaputte Fremd-Config die komplette Übersicht
+  lahmlegen kann).
+- **Wirtschafts-Modul sieht nur Bukkit-bekannte Spieler** - `EconomyCollector`
+  iteriert `Bukkit.getOfflinePlayers()`, also nur Spieler, die sich JEMALS mit
+  diesem konkreten Server verbunden haben. Das wurde extra nachrecherchiert, ob
+  sich das mit TNEs eigener Account-API umgehen lässt (`TNECore.eco().account()`
+  direkt statt über Vault) - zwei native Ansätze getestet
+  (`AccountManager#getAccounts()`, das genau die Map ist, die auch TNEs eigener
+  `/baltop`-Befehl nutzt; sowie `StorageManager#loadAll(Account.class, null)`,
+  ein direkter DB-Bulk-Read). Ergebnis: **die importierte `Economy.mv.db` (69 MB)
+  wird von der laufenden TNE-Instanz gar nicht genutzt** - das Testserver-Setup
+  läuft im YAML-Flatfile-Speichermodus (`plugins/TheNewEconomy/accounts/*.yml`),
+  die H2-Datenbank ist unverbundene Altlast aus dem Datenexport. Die YAML-Ordner
+  enthalten tatsächlich nur 6 Konten (4 echte Spieler + 2 System-/Shop-Konten) -
+  das Dashboard zeigte also von Anfang an die vollständigen, korrekten Zahlen;
+  es gab keine "versteckten" Konten zu importieren. Für einen Server, der TNE
+  tatsächlich im SQL/H2-Modus betreibt, könnte `StorageManager#loadAll` trotzdem
+  relevant werden - der native Collector-Code wurde aber wieder entfernt, weil
+  er sich gegen dieses Setup nicht verifizieren ließ und nicht ungetestet
+  ausgeliefert werden sollte.
 
 ## Bekannte Einschränkungen
 

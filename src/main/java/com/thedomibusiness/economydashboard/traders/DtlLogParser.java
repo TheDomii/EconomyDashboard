@@ -1,5 +1,9 @@
 package com.thedomibusiness.economydashboard.traders;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -27,6 +31,14 @@ public class DtlLogParser {
     private static final Pattern TRADE = Pattern.compile(
             "^\\[(\\d{2}/\\d{2}/\\d{4} \\d{2}:\\d{2}:\\d{2})]\\[TRADE](.+?) traded (.+?) for (.+?) in shop (\\S+) on page \"(.+?)\"(?: with an extra price: ([0-9.]+))?$");
 
+    private static final DateTimeFormatter LOG_TIMESTAMP = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
+
+    // dtlTradersPlus logs the player's formatted display name, e.g. "§a[Spieler]Steve§r"
+    // (a LuckPerms-style rank prefix baked in with raw color codes) instead of the bare
+    // username - not filterable/joinable as-is, so both are stripped back to the real name.
+    private static final Pattern COLOR_CODE = Pattern.compile("§[0-9a-fk-or]");
+    private static final Pattern RANK_PREFIX = Pattern.compile("^\\[[^\\]]+\\]");
+
     public Optional<Transaction> parse(String line) {
         if (line == null || line.isEmpty()) {
             return Optional.empty();
@@ -34,26 +46,43 @@ public class DtlLogParser {
 
         Matcher buySell = BUY_SELL.matcher(line);
         if (buySell.matches()) {
+            long timestampMillis = parseTimestamp(buySell.group(1));
             Transaction.Type type = "BUY".equals(buySell.group(2)) ? Transaction.Type.BUY : Transaction.Type.SELL;
-            String player = buySell.group(3);
+            String player = cleanPlayerName(buySell.group(3));
             int amount = parseInt(buySell.group(4), 1);
             String item = buySell.group(5);
             double price = parsePrice(buySell.group(6));
             String shop = buySell.group(7);
             String page = buySell.group(8);
-            return Optional.of(new Transaction(type, player, shop, page, price, item, amount));
+            return Optional.of(new Transaction(timestampMillis, type, player, shop, page, price, item, amount));
         }
 
         Matcher trade = TRADE.matcher(line);
         if (trade.matches()) {
-            String player = trade.group(2);
+            long timestampMillis = parseTimestamp(trade.group(1));
+            String player = cleanPlayerName(trade.group(2));
             String shop = trade.group(5);
             String page = trade.group(6);
             double price = trade.group(7) != null ? parsePrice(trade.group(7)) : 0.0;
-            return Optional.of(new Transaction(Transaction.Type.TRADE, player, shop, page, price, null, 0));
+            return Optional.of(new Transaction(timestampMillis, Transaction.Type.TRADE, player, shop, page, price, null, 0));
         }
 
         return Optional.empty();
+    }
+
+    private String cleanPlayerName(String raw) {
+        String cleaned = COLOR_CODE.matcher(raw).replaceAll("");
+        cleaned = RANK_PREFIX.matcher(cleaned).replaceFirst("");
+        return cleaned.trim();
+    }
+
+    /** The log's own timestamp (server local time, no timezone marker) - falls back to "now" if unparseable. */
+    private long parseTimestamp(String raw) {
+        try {
+            return LocalDateTime.parse(raw, LOG_TIMESTAMP).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        } catch (DateTimeParseException e) {
+            return System.currentTimeMillis();
+        }
     }
 
     private double parsePrice(String raw) {

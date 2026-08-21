@@ -169,7 +169,7 @@ public class EconomyDashboardPlugin extends JavaPlugin {
             statusLines.add("regionmarket      : inaktiv (AdvancedRegionMarket nicht gefunden)");
         }
 
-        SearchService searchService = new SearchService(this, economy, tradersCollector, () -> latestPrices,
+        SearchService searchService = new SearchService(() -> latestSnapshot, tradersCollector, () -> latestPrices,
                 quickShopService, regionMarketService);
 
         LoginConfig loginConfig = new LoginConfig(
