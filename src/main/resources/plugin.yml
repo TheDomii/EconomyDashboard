@@ -3,7 +3,7 @@ version: ${project.version}
 main: com.thedomibusiness.economydashboard.EconomyDashboardPlugin
 api-version: 1.13
 depend: [Vault]
-softdepend: [Towny, dtlTradersPlus, ChestShop, QuickShop-Hikari]
+softdepend: [Towny, dtlTradersPlus, QuickShop-Hikari, AdvancedRegionMarket]
 libraries:
   - org.xerial:sqlite-jdbc:3.51.1.0
 authors: [thedomibusiness]

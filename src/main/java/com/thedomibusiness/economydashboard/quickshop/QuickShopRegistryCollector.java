@@ -8,9 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Polls QuickShop's own live shop registry (ShopManager#getAllShops()) - QuickShop,
- * unlike ChestShop, actually tracks every shop in a database, so this doesn't need
- * to reconstruct anything from events.
+ * Polls QuickShop's own live shop registry (ShopManager#getAllShops()) - it tracks
+ * every shop in a database, so this doesn't need to reconstruct anything from events.
  */
 public class QuickShopRegistryCollector {
 

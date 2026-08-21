@@ -71,6 +71,6 @@ public class TownyCollector {
         List<TownySnapshot.TownStats> topTowns = new ArrayList<>(townStats.subList(0, Math.min(10, townStats.size())));
 
         return new TownySnapshot(now, totalTowns, totalBalance, newTowns24h, newTowns7d,
-                newPlots24h, newPlots7d, topTowns);
+                newPlots24h, newPlots7d, topTowns, townStats);
     }
 }

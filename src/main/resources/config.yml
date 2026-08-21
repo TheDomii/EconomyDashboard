@@ -15,12 +15,12 @@ modules:
   economy: true
   traders: true
   towny: true
-  chestshop: true
   quickshop: true
+  regionmarket: true
 
 # If true, extra detail is written to the server console - which dtlTradersPlus log
-# lines couldn't be parsed, chest shop sign parsing issues, etc. Useful when
-# something looks wrong in the dashboard and you want to know why.
+# lines couldn't be parsed, etc. Useful when something looks wrong in the
+# dashboard and you want to know why.
 debug: false
 
 # Web dashboard login. There is no HTTPS here (plain com.sun.net.httpserver) - don't

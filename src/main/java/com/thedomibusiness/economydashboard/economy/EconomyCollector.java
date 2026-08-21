@@ -60,10 +60,10 @@ public class EconomyCollector {
         }
 
         balances.sort(Comparator.comparingDouble((EconomySnapshot.PlayerBalance b) -> b.balance).reversed());
-        List<EconomySnapshot.PlayerBalance> top = balances.subList(0, Math.min(10, balances.size()));
+        List<EconomySnapshot.PlayerBalance> top = new ArrayList<>(balances.subList(0, Math.min(10, balances.size())));
 
         return new EconomySnapshot(System.currentTimeMillis(), totalMoney, playerCount,
-                new ArrayList<>(top), distribution);
+                top, balances, distribution);
     }
 
     private String bucketFor(double balance) {

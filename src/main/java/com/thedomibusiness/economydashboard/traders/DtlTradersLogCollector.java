@@ -1,5 +1,6 @@
 package com.thedomibusiness.economydashboard.traders;
 
+import com.thedomibusiness.economydashboard.filter.TransactionFilter;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
@@ -104,6 +105,15 @@ public class DtlTradersLogCollector implements AutoCloseable {
         } catch (SQLException e) {
             plugin.getLogger().log(Level.WARNING, "Item-Suche fehlgeschlagen", e);
             return java.util.Collections.emptyList();
+        }
+    }
+
+    public String exportTransactionsCsv(TransactionFilter filter) {
+        try {
+            return db.exportTransactionsCsv(filter);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "CSV-Export der Haendlertransaktionen fehlgeschlagen", e);
+            return "";
         }
     }
 

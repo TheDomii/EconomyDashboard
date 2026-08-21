@@ -1,5 +1,8 @@
 package com.thedomibusiness.economydashboard.quickshop;
 
+import com.thedomibusiness.economydashboard.filter.TransactionFilter;
+import com.thedomibusiness.economydashboard.web.CsvBuilder;
+
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -12,8 +15,7 @@ import java.util.List;
 
 /**
  * Stores a mirror of QuickShop's own shop registry (refreshed periodically via
- * ShopManager#getAllShops(), not events - QuickShop actually has a real "list all
- * shops" API unlike ChestShop) plus a transaction history built from
+ * ShopManager#getAllShops()) plus a transaction history built from
  * ShopSuccessPurchaseEvent. Persists across restarts in getDataFolder()/quickshop.db.
  */
 public class QuickShopDatabase implements AutoCloseable {
@@ -155,6 +157,95 @@ public class QuickShopDatabase implements AutoCloseable {
             }
         }
         return result;
+    }
+
+    /** Current shop registry as CSV, with optional owner/item substring filters. */
+    public String exportShopsCsv(String owner, String item) throws SQLException {
+        StringBuilder where = new StringBuilder(" WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+        if (owner != null && !owner.isEmpty()) {
+            where.append(" AND owner LIKE ? COLLATE NOCASE");
+            params.add("%" + owner + "%");
+        }
+        if (item != null && !item.isEmpty()) {
+            where.append(" AND item_name LIKE ? COLLATE NOCASE");
+            params.add("%" + item + "%");
+        }
+
+        CsvBuilder csv = new CsvBuilder();
+        csv.header("owner", "item", "price", "type", "location", "updated_at");
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT owner, item_name, price, shop_buys, location, updated_at FROM shops" + where + " ORDER BY owner, item_name")) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    csv.row(rs.getString(1), rs.getString(2), CsvBuilder.formatMoney(rs.getDouble(3)),
+                            rs.getInt(4) == 1 ? "BUYING" : "SELLING", rs.getString(5),
+                            CsvBuilder.formatTimestamp(rs.getLong(6)));
+                }
+            }
+        }
+        return csv.build();
+    }
+
+    /** Raw (non-aggregated) transaction rows for CSV export, with optional filters. Newest first. */
+    public String exportTransactionsCsv(TransactionFilter filter) throws SQLException {
+        StringBuilder where = new StringBuilder(" WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (filter.fromMillis != null) {
+            where.append(" AND timestamp_millis >= ?");
+            params.add(filter.fromMillis);
+        }
+        if (filter.toMillis != null) {
+            where.append(" AND timestamp_millis <= ?");
+            params.add(filter.toMillis);
+        }
+        if (filter.type != null) {
+            where.append(" AND type = ?");
+            params.add(filter.type.toUpperCase());
+        }
+        if (filter.player != null) {
+            where.append(" AND player LIKE ? COLLATE NOCASE");
+            params.add("%" + filter.player + "%");
+        }
+        if (filter.counterparty != null) {
+            where.append(" AND owner LIKE ? COLLATE NOCASE");
+            params.add("%" + filter.counterparty + "%");
+        }
+        if (filter.item != null) {
+            where.append(" AND item_name LIKE ? COLLATE NOCASE");
+            params.add("%" + filter.item + "%");
+        }
+        if (filter.minPrice != null) {
+            where.append(" AND price >= ?");
+            params.add(filter.minPrice);
+        }
+        if (filter.maxPrice != null) {
+            where.append(" AND price <= ?");
+            params.add(filter.maxPrice);
+        }
+
+        String sql = "SELECT timestamp_millis, type, player, owner, item_name, amount, price FROM transactions"
+                + where + " ORDER BY timestamp_millis DESC LIMIT ?";
+        params.add(filter.limit);
+
+        CsvBuilder csv = new CsvBuilder();
+        csv.header("timestamp", "type", "player", "owner", "item", "amount", "price");
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    csv.row(CsvBuilder.formatTimestamp(rs.getLong(1)), rs.getString(2), rs.getString(3),
+                            rs.getString(4), rs.getString(5), rs.getInt(6), CsvBuilder.formatMoney(rs.getDouble(7)));
+                }
+            }
+        }
+        return csv.build();
     }
 
     @Override

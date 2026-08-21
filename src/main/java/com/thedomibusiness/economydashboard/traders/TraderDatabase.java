@@ -1,5 +1,8 @@
 package com.thedomibusiness.economydashboard.traders;
 
+import com.thedomibusiness.economydashboard.filter.TransactionFilter;
+import com.thedomibusiness.economydashboard.web.CsvBuilder;
+
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -182,6 +185,68 @@ public class TraderDatabase implements AutoCloseable {
             }
         }
         return items;
+    }
+
+    /**
+     * Raw (non-aggregated) transaction rows for CSV export/external analysis,
+     * with optional filters. Newest first.
+     */
+    public String exportTransactionsCsv(TransactionFilter filter) throws SQLException {
+        StringBuilder where = new StringBuilder(" WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (filter.fromMillis != null) {
+            where.append(" AND timestamp_millis >= ?");
+            params.add(filter.fromMillis);
+        }
+        if (filter.toMillis != null) {
+            where.append(" AND timestamp_millis <= ?");
+            params.add(filter.toMillis);
+        }
+        if (filter.type != null) {
+            where.append(" AND type = ?");
+            params.add(filter.type.toUpperCase());
+        }
+        if (filter.player != null) {
+            where.append(" AND player LIKE ? COLLATE NOCASE");
+            params.add("%" + filter.player + "%");
+        }
+        if (filter.counterparty != null) {
+            where.append(" AND shop LIKE ? COLLATE NOCASE");
+            params.add("%" + filter.counterparty + "%");
+        }
+        if (filter.item != null) {
+            where.append(" AND item_name LIKE ? COLLATE NOCASE");
+            params.add("%" + filter.item + "%");
+        }
+        if (filter.minPrice != null) {
+            where.append(" AND price >= ?");
+            params.add(filter.minPrice);
+        }
+        if (filter.maxPrice != null) {
+            where.append(" AND price <= ?");
+            params.add(filter.maxPrice);
+        }
+
+        String sql = "SELECT timestamp_millis, type, player, shop, page, item_name, item_amount, price FROM transactions"
+                + where + " ORDER BY timestamp_millis DESC LIMIT ?";
+        params.add(filter.limit);
+
+        CsvBuilder csv = new CsvBuilder();
+        csv.header("timestamp", "type", "player", "shop", "page", "item", "amount", "price");
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    csv.row(CsvBuilder.formatTimestamp(rs.getLong(1)), rs.getString(2), rs.getString(3),
+                            rs.getString(4), rs.getString(5), rs.getString(6), rs.getInt(7),
+                            CsvBuilder.formatMoney(rs.getDouble(8)));
+                }
+            }
+        }
+        return csv.build();
     }
 
     @Override

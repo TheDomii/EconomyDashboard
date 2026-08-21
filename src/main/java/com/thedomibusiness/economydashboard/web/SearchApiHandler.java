@@ -101,17 +101,6 @@ public class SearchApiHandler implements HttpHandler {
         }
         sb.append("],");
 
-        sb.append("\"chestShops\":[");
-        for (int i = 0; i < result.chestShops.size(); i++) {
-            com.thedomibusiness.economydashboard.chestshop.ChestShopSnapshot.ShopListing s = result.chestShops.get(i);
-            if (i > 0) sb.append(",");
-            sb.append("{\"owner\":\"").append(escape(nullToEmpty(s.owner))).append("\",")
-              .append("\"item\":\"").append(escape(nullToEmpty(s.item))).append("\",")
-              .append("\"buyPrice\":").append(s.buyPrice != null ? format(s.buyPrice) : "null").append(",")
-              .append("\"sellPrice\":").append(s.sellPrice != null ? format(s.sellPrice) : "null").append("}");
-        }
-        sb.append("],");
-
         sb.append("\"quickShops\":[");
         for (int i = 0; i < result.quickShops.size(); i++) {
             com.thedomibusiness.economydashboard.quickshop.QuickShopSnapshot.ShopListing s = result.quickShops.get(i);
@@ -120,6 +109,18 @@ public class SearchApiHandler implements HttpHandler {
               .append("\"item\":\"").append(escape(nullToEmpty(s.item))).append("\",")
               .append("\"price\":").append(format(s.price)).append(",")
               .append("\"shopBuys\":").append(s.shopBuys).append("}");
+        }
+        sb.append("],");
+
+        sb.append("\"regions\":[");
+        for (int i = 0; i < result.regions.size(); i++) {
+            com.thedomibusiness.economydashboard.regionmarket.RegionMarketSnapshot.RegionListing r = result.regions.get(i);
+            if (i > 0) sb.append(",");
+            sb.append("{\"regionId\":\"").append(escape(nullToEmpty(r.regionId))).append("\",")
+              .append("\"world\":\"").append(escape(nullToEmpty(r.world))).append("\",")
+              .append("\"sold\":").append(r.sold).append(",")
+              .append("\"owner\":\"").append(escape(nullToEmpty(r.owner))).append("\",")
+              .append("\"price\":").append(format(r.price)).append("}");
         }
         sb.append("]");
 

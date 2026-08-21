@@ -1,5 +1,6 @@
 package com.thedomibusiness.economydashboard.quickshop;
 
+import com.thedomibusiness.economydashboard.filter.TransactionFilter;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
@@ -47,6 +48,24 @@ public class QuickShopService implements AutoCloseable {
         } catch (SQLException e) {
             plugin.getLogger().log(Level.WARNING, "QuickShop-Suche fehlgeschlagen", e);
             return Collections.emptyList();
+        }
+    }
+
+    public String exportShopsCsv(String owner, String item) {
+        try {
+            return db.exportShopsCsv(owner, item);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "CSV-Export der QuickShop-Registry fehlgeschlagen", e);
+            return "";
+        }
+    }
+
+    public String exportTransactionsCsv(TransactionFilter filter) {
+        try {
+            return db.exportTransactionsCsv(filter);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "CSV-Export der QuickShop-Transaktionen fehlgeschlagen", e);
+            return "";
         }
     }
 

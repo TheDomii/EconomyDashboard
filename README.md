@@ -3,9 +3,10 @@
 Spigot/Paper-Plugin mit eingebettetem Webserver, das eine Live-Übersicht über die
 Server-Wirtschaft liefert. End-to-end auf einem lokalen Testserver verifiziert
 (Paper 1.21.11 + Vault + TheNewEconomy + Citizens + dtlTradersPlus + Towny +
-ChestShop + QuickShop-Hikari): **Geldmenge & Verteilung**, **Händler-Übersicht über
-dtlTradersPlus** inkl. Live-Preisliste, **Towny-Anbindung**, **Suche**,
-**ChestShop-Anbindung**, **QuickShop-Anbindung**, **Login-Schutz** und **Modul-Toggles**.
+QuickShop-Hikari + AdvancedRegionMarket): **Geldmenge & Verteilung**,
+**Händler-Übersicht über dtlTradersPlus** inkl. Live-Preisliste,
+**Towny-Anbindung**, **QuickShop-Anbindung**, **AdvancedRegionMarket-Anbindung**,
+**Suche**, **CSV-Export mit Filtern**, **Login-Schutz** und **Modul-Toggles**.
 
 ## Was es aktuell kann
 
@@ -19,26 +20,84 @@ dtlTradersPlus** inkl. Live-Preisliste, **Towny-Anbindung**, **Suche**,
 - Towny: Anzahl Städte, Gesamtvermögen aller Stadtkassen, neue Städte (24h/7 Tage,
   aus `Town.getRegistered()`), neue Plots (24h/7 Tage, aus `TownBlock.getClaimedAt()`),
   Top-Städte nach Kassenstand.
-- ChestShop: hört auf `ShopCreatedEvent`/`ShopEditedEvent`/`ShopDestroyedEvent`/
-  `TransactionEvent` (dtlTradersPlus liest Logs, ChestShop selbst hat keine Logs -
-  hier wird direkt an den echten Events gehorcht, zuverlässiger als Log-Scraping).
-  Zeigt jeden bekannten Shop mit Besitzer, Item, Mengen, Kauf-/Verkaufspreis, plus
-  Top-Spieler nach Netto-Umsatz.
 - QuickShop-Hikari: liest QuickShops eigene Shop-Registry live über
-  `ShopManager#getAllShops()` (QuickShop führt, anders als ChestShop, tatsächlich
-  eine echte Datenbank aller Shops - kein Event-Zusammenbau nötig), plus
-  Transaktionshistorie über `ShopSuccessPurchaseEvent`.
-- Live-Suche über Spieler, Shops (dtlTradersPlus), Items, ChestShops und QuickShops
-  (min. 2 Zeichen).
+  `ShopManager#getAllShops()` (eine echte Datenbank aller Shops, kein
+  Event-Zusammenbau nötig), plus Transaktionshistorie über `ShopSuccessPurchaseEvent`.
+- AdvancedRegionMarket: spiegelt die Region-Liste live (`RegionManager` ist
+  `Iterable<Region>`, plus `Region#getSubregions()`). Verkäufe werden erkannt, indem
+  der Sold-Status jeder Region bei jeder Aktualisierung mit dem vorherigen Stand
+  verglichen wird (ARM hat kein zuverlässiges Post-Kauf-Event - `PreBuyEvent`
+  feuert vor der eigentlichen Geld-/Besitzübertragung und kann abgebrochen werden,
+  ist also kein Erfolgssignal). Zeigt Regionen insgesamt, verkauft/verfügbar,
+  erkannte Verkäufe, Umsatz, Top-Käufer nach Ausgaben.
+- Live-Suche über Spieler, Shops (dtlTradersPlus), Items, QuickShops und
+  AdvancedRegionMarket-Regionen (min. 2 Zeichen).
+- **CSV-Export mit Filtern** für jeden Datenbereich (Spieler, Preisliste, Städte,
+  QuickShop-Registry, AdvancedRegionMarket-Registry) sowie separat für die
+  vollständige, ungefilterte Transaktionshistorie von dtlTradersPlus, QuickShop
+  und AdvancedRegionMarket (Zeitraum, Typ, Spieler, Shop/Besitzer/Region, Item,
+  Preisspanne) - gedacht zum Weiterverarbeiten in Excel oder durch eine externe
+  KI/Auswertung. Siehe [CSV-Export](#csv-export--filter) unten.
 - Login-Maske mit konfigurierbarem Benutzer/Passwort und Hintergrundbild (URL oder
   lokale Datei), Session-Cookies, Logging von erfolgreichen/fehlgeschlagenen
   Login-Versuchen in der Server-Konsole.
+- Beim Start schreibt das Plugin einen Status-Block in die Konsole (welche Module
+  aktiv sind, welche Fremd-Plugins gefunden wurden) und pro Modul eine einzelne
+  Zeile, sobald die erste echte Datenerfassung durchgelaufen ist (z.B. "[traders]
+  Erste Handelsdaten erfasst: 6 Transaktionen...") - siehe
+  [Start-Logging](#start-logging) unten.
 - Jede Datenquelle einzeln über `config.yml` → `modules` abschaltbar (z.B. nur Towny).
-- Speichert Händler-, ChestShop- und QuickShop-Daten dauerhaft in SQLite
-  (`plugins/EconomyDashboard/data.db`, `chestshop.db`, `quickshop.db`) –
-  übersteht Neustarts.
+- Speichert Händler- und QuickShop-Daten dauerhaft in SQLite
+  (`plugins/EconomyDashboard/data.db`, `quickshop.db`) – übersteht Neustarts.
 - Stellt das über einen eingebetteten Webserver bereit (kein Java-Webserver
   wie Tomcat nötig, läuft direkt im Plugin) unter `http://<server-ip>:8080/`.
+
+## CSV-Export & Filter
+
+Jeder Datenbereich im Dashboard hat unten ein kleines Filterfeld mit einem
+"CSV herunterladen"-Button. Die gleichen Endpunkte lassen sich auch direkt (z.B.
+per `curl` oder von einem externen Auswertungs-Tool) mit Query-Parametern aufrufen -
+sie brauchen dieselbe Login-Session wie das Dashboard.
+
+| Endpoint | Filter-Parameter | Inhalt |
+|---|---|---|
+| `/api/economy/export.csv` | `name`, `minBalance`, `maxBalance` | Alle Spieler mit Konto |
+| `/api/traders/prices/export.csv` | `shop`, `item` | Aktuelle Preisliste (dtlTradersPlus) |
+| `/api/traders/transactions/export.csv` | `from`, `to`, `type`, `player`, `shop`, `item`, `minPrice`, `maxPrice`, `limit` | Einzelne dtlTradersPlus-Transaktionen (nicht aggregiert) |
+| `/api/towny/export.csv` | `name`, `minBalance` | Alle Städte |
+| `/api/quickshops/export.csv` | `owner`, `item` | Aktuelle QuickShop-Registry |
+| `/api/quickshops/transactions/export.csv` | `from`, `to`, `type`, `player`, `owner`, `item`, `minPrice`, `maxPrice`, `limit` | Einzelne QuickShop-Transaktionen (nicht aggregiert) |
+| `/api/regionmarket/export.csv` | `owner`, `world`, `sold` (`true`/`false`) | Aktuelle AdvancedRegionMarket-Registry |
+| `/api/regionmarket/transactions/export.csv` | `from`, `to`, `type` (`SELL`/`UNSELL`), `player`, `region`, `minPrice`, `maxPrice`, `limit` | Einzelne erkannte Region-Verkäufe/Rücknahmen (nicht aggregiert) |
+
+`from`/`to` akzeptieren entweder `yyyy-MM-dd` oder Millisekunden seit Epoch.
+`limit` begrenzt die Zeilenzahl (Standard 5000, Maximum 50000). Alle Textfilter
+sind Teilstring-Suchen, nicht case-sensitiv. Die Dateien sind UTF-8 mit BOM (damit
+Excel Umlaute korrekt anzeigt) und haben einen `Content-Disposition: attachment`-
+Header, laden also direkt als Datei herunter statt im Browser angezeigt zu werden.
+
+## Start-Logging
+
+Am Ende von `onEnable()` schreibt das Plugin einen Status-Block:
+
+```
+============================================================
+ EconomyDashboard v0.1.0 - Status
+ economy-provider : aktiv (TheNewEconomy via Vault)
+ economy           : aktiv
+ traders (dtlTradersPlus) : aktiv
+ towny             : aktiv (Towny gefunden)
+ quickshop         : aktiv (QuickShop-Hikari gefunden)
+ regionmarket      : aktiv (AdvancedRegionMarket gefunden)
+ web-dashboard     : http://0.0.0.0:8080/ (Login erforderlich)
+============================================================
+```
+
+Zusätzlich schreibt jedes aktive Modul genau einmal (beim ersten erfolgreichen
+Durchlauf seines Erfassungs-Tasks) eine Zeile mit den tatsächlich gefundenen Daten,
+z.B. `[traders] Erste Handelsdaten erfasst: 6 Transaktionen in 2 Shops (Top-Liste).`
+- damit man ohne das Dashboard zu öffnen in der Konsole sieht, ob die Anbindung
+wirklich Daten liefert.
 
 ## Wie die Formate/APIs ermittelt wurden
 
@@ -50,13 +109,19 @@ dtlTradersPlus** inkl. Live-Preisliste, **Towny-Anbindung**, **Suche**,
   `DtlLogParser` angepasst werden.
 - **Towny**: offizielle `TownyAPI`/`Town`/`TownBlock`-Javadocs
   (townyadvanced.github.io/Towny/javadoc).
-- **ChestShop**: offizielle Event-Klassen aus dem `ChestShop-authors/ChestShop-3`
-  GitHub-Repo (`com.Acrobot.ChestShop.Events.*`).
 - **QuickShop-Hikari**: kompiliertes Jar mit CFR dekompiliert (die Source-API ist
   stark generisch, `Shop<U,L>`; die dekompilierten, typ-erasure-aufgelösten
   Signaturen zeigen, dass der rohe `Shop`-Typ ohne Generics-Ärger nutzbar ist).
   Zentrale Fundstellen: `ShopManager#getAllShops()`, `Shop#getPrice()`/`getItem()`/
   `getOwner()`/`shopType().isBuying()`, `ShopSuccessPurchaseEvent`.
+- **AdvancedRegionMarket**: Source direkt vom GitHub-Repo gelesen
+  (`alex9849/advanced-region-market`). `RegionManager` (implementiert
+  `Iterable<Region>` über `YamlFileManager`) liefert alle Top-Level-Regionen,
+  `Region#getSubregions()` die verschachtelten. Geprüft wurde auch, ob es ein
+  brauchbares "Region verkauft"-Event gibt: `PreBuyEvent` ist der einzige
+  Kauf-Hook und feuert synchron *vor* `setSold()`/dem eigentlichen Geldtransfer
+  in `Region#buy()` - abbrechbar, also kein Erfolgssignal. Deshalb Registry-
+  Spiegelung + Sold-Status-Diff wie bei Towny/QuickShop, nur ohne Event-Anteil.
 
 ## Bekannte Einschränkungen
 
@@ -69,38 +134,33 @@ dtlTradersPlus** inkl. Live-Preisliste, **Towny-Anbindung**, **Suche**,
 - dtlTradersPlus TRADE-Zeilen: Shopname wird (anders als bei BUY/SELL) nicht in
   Anführungszeichen gesetzt - ein Shop mit Leerzeichen im Namen lässt sich aus
   einer TRADE-Zeile daher nicht zuverlässig parsen (Bug in dtlTradersPlus selbst).
-- ChestShop hat keine "Liste alle Shops"-API - die Registrierung baut sich live aus
-  Events auf. Shops, die vor der Installation dieses Plugins gebaut wurden, tauchen
-  erst auf, sobald sie das nächste Mal bearbeitet oder gehandelt werden.
-- ChestShop-Preise: Der Sign-Text wird best-effort geparst (`buy:sell`-Konvention).
-  Bei stark angepasstem Preisformat (eigenes Währungssymbol o.ä.) können Preise
-  als `null` ankommen - betrifft nur die Registrierungs-Anzeige, nicht die
-  Transaktionshistorie (die nutzt `TransactionEvent#getExactPrice()`, den echten
-  von ChestShop selbst berechneten Preis).
 - **QuickShop ist vollständig end-to-end mit einer echten Transaktion getestet**:
   Shop per `/quickshop create 5` angelegt (Item, Preis, Besitzer korrekt in der
   Registry gelandet), Kiste befüllt, ein zweiter Spieler hat per Linksklick
   5x Netherite Scrap für $25.00 gekauft - danach zeigte
   `/api/quickshops/overview` exakt 1 Transaktion, 25.00 Einnahmen, korrekt
-  TestSpieler1 zugeordnet. (Nebenbefund: das anfängliche "kein unterstützter
-  Blocktyp" lag nicht an Towny/Berechtigungen, sondern schlicht an einer
-  leeren Verkaufskiste bzw. ungeladenem Terrain beim Testen - beides gelöst.)
-- ChestShop-Integration wurde **nicht** mit einer echten Transaktion end-to-end
-  getestet - Sign-Edit-Netzwerkpakete sind in MC 1.21.11 zu komplex, um sie per
-  Bot sauber nachzubilden (Kiste+Schild aufstellen ging, das "offizielle"
-  Beschreiben des Schilds per Client-Paket nicht). Kompiliert und lädt sauber
-  gegen die echte API (`com.Acrobot.ChestShop.Events.*`), nur die Live-Transaktion
-  selbst ist unbestätigt. Empfehlung: einmal manuell im Spiel eine Kiste mit
-  Schild bauen und einen Kauf/Verkauf testen.
+  zugeordnet.
+- **AdvancedRegionMarket ist end-to-end mit zwei echten Käufen getestet**: Region
+  `armtest1` angelegt und noch im selben Erfassungszyklus gekauft (zeigt, dass
+  der "keine Fake-Verkäufe beim ersten Poll"-Schutz greift - eine Region, die
+  schon beim allerersten Scan verkauft ist, wird nicht rückwirkend als Transaktion
+  gezählt). Region `armtest2` angelegt, ein Zyklus abgewartet (Status "verfügbar"
+  bestätigt), dann gekauft ($75) - danach zeigte `/api/regionmarket/overview`
+  exakt 1 erkannten Verkauf, 75.00 Umsatz, korrekt zugeordnet zu TestSpieler1.
+  Da die Erkennung auf Polling basiert, ist der Zeitstempel "zuerst erkannt",
+  nicht der exakte Kaufzeitpunkt (Genauigkeit = ein Erfassungsintervall).
 - Nation-Kassen/Steuer-Einnahmen (nur Stadt-Ebene ist bisher angebunden).
-- Zeitverlauf/Trends (Dashboard zeigt aktuell nur den Gesamtstand, keine Graphen
-  über Zeit - die Rohdaten in SQLite stehen dafür aber schon bereit).
+- Zeitverlauf/Trends im Dashboard selbst (aktuell nur der Gesamtstand als
+  Momentaufnahme, keine Graphen über Zeit) - über den CSV-Export mit `from`/`to`
+  lässt sich das aber schon extern auswerten, die Rohdaten sind ja in SQLite.
+- ChestShop wurde bewusst wieder entfernt (der Plugin-Autor gilt als veraltet/
+  nicht mehr gepflegt) - wer es zurück haben möchte, findet den Ansatz (Events statt
+  Log-Dateien, `ShopCreatedEvent`/`ShopEditedEvent`/`ShopDestroyedEvent`/
+  `TransactionEvent`) noch in der Git-Historie dieses Repos.
 
 ## Bauen
 
-Voraussetzung: JDK 17+ und Maven. `libs/ChestShop.jar` muss im Projekt liegen
-(nicht auf Maven Central verfügbar, wird als lokale `system`-Abhängigkeit
-referenziert - liegt bereits im Repo).
+Voraussetzung: JDK 17+ und Maven.
 
 ```
 mvn package
@@ -112,15 +172,17 @@ Ergebnis liegt danach unter `target/economydashboard-0.1.0.jar`.
 
 1. Jar in den `plugins`-Ordner eures Servers kopieren.
 2. Server neu starten (Vault + TheNewEconomy müssen laufen; dtlTradersPlus, Towny,
-   ChestShop und QuickShop-Hikari sind optional - ohne sie bleiben die jeweiligen
-   Dashboard-Bereiche einfach leer, gesteuert über `config.yml` → `modules`). Der SQLite-Treiber wird
-   beim ersten Start automatisch von Maven Central nachgeladen (Spigot/Paper
-   Library-Loader, `plugin.yml` → `libraries:`) – der Server braucht dafür
-   einmalig Internetzugang.
+   QuickShop-Hikari und AdvancedRegionMarket (+ dessen eigene Abhängigkeiten
+   WorldGuard/WorldEdit) sind optional - ohne sie bleiben die jeweiligen
+   Dashboard-Bereiche einfach leer, gesteuert über `config.yml` → `modules`). Der
+   SQLite-Treiber wird beim ersten Start automatisch von Maven Central nachgeladen
+   (Spigot/Paper Library-Loader, `plugin.yml` → `libraries:`) – der Server braucht
+   dafür einmalig Internetzugang.
 3. `plugins/EconomyDashboard/config.yml` prüfen: Port, Login-Zugangsdaten
    (**Standardpasswort unbedingt ändern**, sonst Warnung in der Konsole bei jedem
    Start), ggf. Module abschalten.
-4. Dashboard im Browser öffnen: `http://<server-ip>:8080/`.
+4. Dashboard im Browser öffnen: `http://<server-ip>:8080/`. In der Konsole prüfen,
+   ob der Status-Block beim Start alle erwarteten Module als "aktiv" zeigt.
 
 ## Konfiguration (config.yml)
 
@@ -133,8 +195,8 @@ modules:
   economy: true
   traders: true
   towny: true
-  chestshop: true
   quickshop: true
+  regionmarket: true
 debug: false
 login:
   enabled: true

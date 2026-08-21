@@ -27,10 +27,12 @@ public class TownySnapshot {
     public final int newPlotsLast24h;
     public final int newPlotsLast7d;
     public final List<TownStats> topTowns;
+    /** Every town, unsorted-cap - used for CSV export/filtering. */
+    public final List<TownStats> allTowns;
 
     public TownySnapshot(long generatedAtMillis, int totalTowns, double totalTownBalance,
                           int newTownsLast24h, int newTownsLast7d, int newPlotsLast24h, int newPlotsLast7d,
-                          List<TownStats> topTowns) {
+                          List<TownStats> topTowns, List<TownStats> allTowns) {
         this.generatedAtMillis = generatedAtMillis;
         this.totalTowns = totalTowns;
         this.totalTownBalance = totalTownBalance;
@@ -39,9 +41,11 @@ public class TownySnapshot {
         this.newPlotsLast24h = newPlotsLast24h;
         this.newPlotsLast7d = newPlotsLast7d;
         this.topTowns = topTowns;
+        this.allTowns = allTowns;
     }
 
     public static TownySnapshot empty() {
-        return new TownySnapshot(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0, Collections.emptyList());
+        return new TownySnapshot(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0,
+                Collections.emptyList(), Collections.emptyList());
     }
 }

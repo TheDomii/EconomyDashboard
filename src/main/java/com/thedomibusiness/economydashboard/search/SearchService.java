@@ -1,9 +1,9 @@
 package com.thedomibusiness.economydashboard.search;
 
-import com.thedomibusiness.economydashboard.chestshop.ChestShopService;
-import com.thedomibusiness.economydashboard.chestshop.ChestShopSnapshot;
 import com.thedomibusiness.economydashboard.quickshop.QuickShopService;
 import com.thedomibusiness.economydashboard.quickshop.QuickShopSnapshot;
+import com.thedomibusiness.economydashboard.regionmarket.RegionMarketService;
+import com.thedomibusiness.economydashboard.regionmarket.RegionMarketSnapshot;
 import com.thedomibusiness.economydashboard.traders.DtlTradersLogCollector;
 import com.thedomibusiness.economydashboard.traders.ShopPriceEntry;
 import com.thedomibusiness.economydashboard.traders.TraderSnapshot;
@@ -32,18 +32,18 @@ public class SearchService {
     private final Economy economy;
     private final DtlTradersLogCollector tradersCollector;
     private final Supplier<List<ShopPriceEntry>> pricesSupplier;
-    private final ChestShopService chestShopService;
     private final QuickShopService quickShopService;
+    private final RegionMarketService regionMarketService;
 
     public SearchService(Plugin plugin, Economy economy, DtlTradersLogCollector tradersCollector,
-                          Supplier<List<ShopPriceEntry>> pricesSupplier, ChestShopService chestShopService,
-                          QuickShopService quickShopService) {
+                          Supplier<List<ShopPriceEntry>> pricesSupplier, QuickShopService quickShopService,
+                          RegionMarketService regionMarketService) {
         this.plugin = plugin;
         this.economy = economy;
         this.tradersCollector = tradersCollector;
         this.pricesSupplier = pricesSupplier;
-        this.chestShopService = chestShopService;
         this.quickShopService = quickShopService;
+        this.regionMarketService = regionMarketService;
     }
 
     public SearchResult search(String query) {
@@ -54,14 +54,14 @@ public class SearchService {
                 ? tradersCollector.searchShops(query, DEFAULT_LIMIT)
                 : Collections.emptyList();
         List<SearchResult.ItemResult> items = searchItems(query, needle);
-        List<ChestShopSnapshot.ShopListing> chestShops = chestShopService != null
-                ? chestShopService.searchShops(query, DEFAULT_LIMIT)
-                : Collections.emptyList();
         List<QuickShopSnapshot.ShopListing> quickShops = quickShopService != null
                 ? quickShopService.searchShops(query, DEFAULT_LIMIT)
                 : Collections.emptyList();
+        List<RegionMarketSnapshot.RegionListing> regions = regionMarketService != null
+                ? regionMarketService.searchRegions(query, DEFAULT_LIMIT)
+                : Collections.emptyList();
 
-        return new SearchResult(players, shops, items, chestShops, quickShops);
+        return new SearchResult(players, shops, items, quickShops, regions);
     }
 
     private List<SearchResult.PlayerResult> searchPlayers(String needle) {

@@ -1,0 +1,56 @@
+package com.thedomibusiness.economydashboard.web;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.thedomibusiness.economydashboard.economy.EconomySnapshot;
+
+import java.io.IOException;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Supplier;
+
+public class EconomyCsvExportHandler implements HttpHandler {
+
+    private final Supplier<EconomySnapshot> snapshotSupplier;
+
+    public EconomyCsvExportHandler(Supplier<EconomySnapshot> snapshotSupplier) {
+        this.snapshotSupplier = snapshotSupplier;
+    }
+
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+        Map<String, String> query = HttpUtil.parseQuery(exchange.getRequestURI().getRawQuery());
+        String nameFilter = query.getOrDefault("name", "").toLowerCase(Locale.ROOT);
+        Double minBalance = parseDouble(query.get("minBalance"));
+        Double maxBalance = parseDouble(query.get("maxBalance"));
+
+        EconomySnapshot snapshot = snapshotSupplier.get();
+        CsvBuilder csv = new CsvBuilder();
+        csv.header("player", "balance");
+        for (EconomySnapshot.PlayerBalance p : snapshot.allBalances) {
+            if (!nameFilter.isEmpty() && !p.name.toLowerCase(Locale.ROOT).contains(nameFilter)) {
+                continue;
+            }
+            if (minBalance != null && p.balance < minBalance) {
+                continue;
+            }
+            if (maxBalance != null && p.balance > maxBalance) {
+                continue;
+            }
+            csv.row(p.name, CsvBuilder.formatMoney(p.balance));
+        }
+
+        HttpUtil.sendCsv(exchange, "spieler.csv", csv.build());
+    }
+
+    private Double parseDouble(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(raw.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+}

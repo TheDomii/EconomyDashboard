@@ -70,25 +70,25 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- ChestShop isn't published to any Maven repository (only distributed as a
-             release jar), so it's checked into libs/ and referenced directly. Only
-             needed at compile time - guarded at runtime the same way as Towny. -->
-        <dependency>
-            <groupId>com.acrobot.chestshop</groupId>
-            <artifactId>chestshop</artifactId>
-            <version>3.13-pre-1</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/ChestShop.jar</systemPath>
-        </dependency>
-
-        <!-- QuickShop-Hikari, properly published to CodeMC's Maven repo (unlike
-             ChestShop). Only needed at compile time - guarded at runtime the same
-             way as Towny/ChestShop. -->
+        <!-- QuickShop-Hikari, properly published to CodeMC's Maven repo. Only needed
+             at compile time - guarded at runtime the same way as Towny. -->
         <dependency>
             <groupId>com.ghostchu</groupId>
             <artifactId>quickshop-bukkit</artifactId>
             <version>6.3.0.0</version>
             <classifier>shaded</classifier>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- AdvancedRegionMarket, built by jitpack from the GitHub repo (not published
+             to a proper Maven repo). Jitpack's build shades the sibling "arminterface"
+             module (Region/RegionManager/WGRegion live there) into this jar, so no
+             separate dependency on that module is needed. Only needed at compile time -
+             guarded at runtime the same way as Towny/QuickShop. -->
+        <dependency>
+            <groupId>com.github.alex9849.advanced-region-market</groupId>
+            <artifactId>advancedregionmarket</artifactId>
+            <version>3.5.4</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

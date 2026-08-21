@@ -1,7 +1,7 @@
 package com.thedomibusiness.economydashboard.search;
 
-import com.thedomibusiness.economydashboard.chestshop.ChestShopSnapshot;
 import com.thedomibusiness.economydashboard.quickshop.QuickShopSnapshot;
+import com.thedomibusiness.economydashboard.regionmarket.RegionMarketSnapshot;
 import com.thedomibusiness.economydashboard.traders.TraderSnapshot;
 
 import java.util.List;
@@ -37,15 +37,15 @@ public class SearchResult {
     public final List<PlayerResult> players;
     public final List<TraderSnapshot.ShopStats> shops;
     public final List<ItemResult> items;
-    public final List<ChestShopSnapshot.ShopListing> chestShops;
     public final List<QuickShopSnapshot.ShopListing> quickShops;
+    public final List<RegionMarketSnapshot.RegionListing> regions;
 
     public SearchResult(List<PlayerResult> players, List<TraderSnapshot.ShopStats> shops, List<ItemResult> items,
-                         List<ChestShopSnapshot.ShopListing> chestShops, List<QuickShopSnapshot.ShopListing> quickShops) {
+                         List<QuickShopSnapshot.ShopListing> quickShops, List<RegionMarketSnapshot.RegionListing> regions) {
         this.players = players;
         this.shops = shops;
         this.items = items;
-        this.chestShops = chestShops;
         this.quickShops = quickShops;
+        this.regions = regions;
     }
 }
