@@ -196,29 +196,6 @@ wurden mehrere echte Bugs gefunden und gefixt:
 - dtlTradersPlus TRADE-Zeilen: Shopname wird (anders als bei BUY/SELL) nicht in
   Anführungszeichen gesetzt - ein Shop mit Leerzeichen im Namen lässt sich aus
   einer TRADE-Zeile daher nicht zuverlässig parsen (Bug in dtlTradersPlus selbst).
-- **QuickShop ist vollständig end-to-end mit einer echten Transaktion getestet**:
-  Shop per `/quickshop create 5` angelegt (Item, Preis, Besitzer korrekt in der
-  Registry gelandet), Kiste befüllt, ein zweiter Spieler hat per Linksklick
-  5x Netherite Scrap für $25.00 gekauft - danach zeigte
-  `/api/quickshops/overview` exakt 1 Transaktion, 25.00 Einnahmen, korrekt
-  zugeordnet.
-- **AdvancedRegionMarket ist end-to-end mit zwei echten Käufen getestet**: Region
-  `armtest1` angelegt und noch im selben Erfassungszyklus gekauft (zeigt, dass
-  der "keine Fake-Verkäufe beim ersten Poll"-Schutz greift - eine Region, die
-  schon beim allerersten Scan verkauft ist, wird nicht rückwirkend als Transaktion
-  gezählt). Region `armtest2` angelegt, ein Zyklus abgewartet (Status "verfügbar"
-  bestätigt), dann gekauft ($75) - danach zeigte `/api/regionmarket/overview`
-  exakt 1 erkannten Verkauf, 75.00 Umsatz, korrekt zugeordnet zu TestSpieler1.
-  Da die Erkennung auf Polling basiert, ist der Zeitstempel "zuerst erkannt",
-  nicht der exakte Kaufzeitpunkt (Genauigkeit = ein Erfassungsintervall).
-- Nation-Kassen/Steuer-Einnahmen (nur Stadt-Ebene ist bisher angebunden).
-- Zeitverlauf/Trends im Dashboard selbst (aktuell nur der Gesamtstand als
-  Momentaufnahme, keine Graphen über Zeit) - über den CSV-Export mit `from`/`to`
-  lässt sich das aber schon extern auswerten, die Rohdaten sind ja in SQLite.
-- ChestShop wurde bewusst wieder entfernt (der Plugin-Autor gilt als veraltet/
-  nicht mehr gepflegt) - wer es zurück haben möchte, findet den Ansatz (Events statt
-  Log-Dateien, `ShopCreatedEvent`/`ShopEditedEvent`/`ShopDestroyedEvent`/
-  `TransactionEvent`) noch in der Git-Historie dieses Repos.
 
 ## Bauen
 
