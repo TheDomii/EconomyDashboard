@@ -1,0 +1,105 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.thedomibusiness</groupId>
+    <artifactId>economydashboard</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <repositories>
+        <!-- Paper API: publicly published, no BuildTools needed. Plugins built
+             against it also run fine on plain Spigot servers. -->
+        <repository>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+        <repository>
+            <id>glaremasters-towny</id>
+            <url>https://repo.glaremasters.me/repository/towny/</url>
+        </repository>
+        <repository>
+            <id>codemc-quickshop</id>
+            <url>https://repo.codemc.io/repository/maven-public/</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper-api</artifactId>
+            <version>1.20.4-R0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Vault economy API (TheNewEconomy hooks into this) -->
+        <dependency>
+            <groupId>com.github.MilkBowl</groupId>
+            <artifactId>VaultAPI</artifactId>
+            <version>1.7</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- SQLite JDBC driver. Not shaded into the jar - declared under plugin.yml's
+             "libraries:" so Paper/Spigot's own library loader fetches and provides it
+             at runtime (same mechanism Citizens uses for its dependencies). -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.51.1.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Towny API, only needed at compile time - guarded at runtime by checking
+             whether the Towny plugin is actually enabled before touching these classes. -->
+        <dependency>
+            <groupId>com.palmergames.bukkit.towny</groupId>
+            <artifactId>towny</artifactId>
+            <version>0.103.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ChestShop isn't published to any Maven repository (only distributed as a
+             release jar), so it's checked into libs/ and referenced directly. Only
+             needed at compile time - guarded at runtime the same way as Towny. -->
+        <dependency>
+            <groupId>com.acrobot.chestshop</groupId>
+            <artifactId>chestshop</artifactId>
+            <version>3.13-pre-1</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/ChestShop.jar</systemPath>
+        </dependency>
+
+        <!-- QuickShop-Hikari, properly published to CodeMC's Maven repo (unlike
+             ChestShop). Only needed at compile time - guarded at runtime the same
+             way as Towny/ChestShop. -->
+        <dependency>
+            <groupId>com.ghostchu</groupId>
+            <artifactId>quickshop-bukkit</artifactId>
+            <version>6.3.0.0</version>
+            <classifier>shaded</classifier>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>${project.artifactId}-${project.version}</finalName>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+    </build>
+</project>

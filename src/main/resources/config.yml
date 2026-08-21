@@ -1,0 +1,40 @@
+# EconomyDashboard configuration
+
+web-server:
+  # Address to bind to. Use 0.0.0.0 to allow access from other machines in your network.
+  bind-address: "0.0.0.0"
+  port: 8080
+
+# How often (in seconds) the economy snapshot used by the dashboard is refreshed.
+refresh-interval-seconds: 60
+
+# Turn individual data sources off without removing the plugin - e.g. if you only
+# want the Towny overview and nothing else. A disabled module's dashboard section
+# just stays empty; it doesn't need the corresponding plugin to even be installed.
+modules:
+  economy: true
+  traders: true
+  towny: true
+  chestshop: true
+  quickshop: true
+
+# If true, extra detail is written to the server console - which dtlTradersPlus log
+# lines couldn't be parsed, chest shop sign parsing issues, etc. Useful when
+# something looks wrong in the dashboard and you want to know why.
+debug: false
+
+# Web dashboard login. There is no HTTPS here (plain com.sun.net.httpserver) - don't
+# expose this port to the open internet even with a login enabled; keep it on your
+# local network or behind a VPN/reverse proxy with TLS.
+login:
+  enabled: true
+  username: "admin"
+  # Change this. Stored in plain text in this file, same as e.g. server.properties'
+  # rcon.password - keep this file readable only by whoever administers the server.
+  password: "changeme"
+  # Either a full "http(s)://..." URL, or a filename that must exist in
+  # plugins/EconomyDashboard/ (e.g. "background.jpg"). Leave empty for a plain
+  # background color.
+  background-image: ""
+  # How long a login stays valid, in minutes.
+  session-minutes: 720

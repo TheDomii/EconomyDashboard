@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Server-Wirtschaft Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171e2e;
+    --border: #2a3348;
+    --text: #e8ecf4;
+    --muted: #8b95ab;
+    --accent: #4fd1a5;
+    --accent2: #6ea8fe;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .stat-value { font-size: 28px; font-weight: 600; }
+  .stat-label { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
+  .bar-label { width: 90px; color: var(--muted); flex-shrink: 0; }
+  .bar-track { flex: 1; background: #1e2740; border-radius: 4px; overflow: hidden; height: 14px; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+  .bar-count { width: 32px; text-align: right; flex-shrink: 0; }
+  .search-box {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 15px;
+    margin-bottom: 8px;
+  }
+  .search-box:focus { outline: 2px solid var(--accent2); }
+  .search-section { margin-top: 8px; }
+  .search-section h4 { margin: 12px 0 4px; color: var(--muted); font-weight: 500; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .empty-hint { color: var(--muted); font-size: 13px; padding: 4px 0; }
+</style>
+</head>
+<body>
+  <h1>Server-Wirtschaft Dashboard <a href="/logout" style="font-size:13px; color:var(--muted); float:right;">Abmelden</a></h1>
+  <div class="sub" id="updated">lade...</div>
+
+  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
+  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="totalMoney">-</div>
+      <div class="stat-label">Geld im Umlauf (Summe aller Spielerkonten)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="playerCount">-</div>
+      <div class="stat-label">Spieler mit Konto</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="avgMoney">-</div>
+      <div class="stat-label">Durchschnitt pro Spieler</div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <h3 style="margin-top:0;">Verteilung nach Kontostand</h3>
+      <div id="distribution"></div>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;">Top 10 reichste Spieler</h3>
+      <table>
+        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Guthaben</th></tr></thead>
+        <tbody id="topTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2 style="margin-top:32px;">Händler (dtlTradersPlus)</h2>
+  <div class="sub">Einnahmen = Spieler kaufen vom Shop. Auszahlungen = Spieler verkaufen an den Shop. Netto = Einnahmen − Auszahlungen.</div>
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="txCount">-</div>
+      <div class="stat-label">Transaktionen insgesamt (dauerhaft gespeichert)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="txRevenue">-</div>
+      <div class="stat-label">Einnahmen (Käufe)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="txPayouts">-</div>
+      <div class="stat-label">Auszahlungen (Verkäufe)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="txNet">-</div>
+      <div class="stat-label">Netto</div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <h3 style="margin-top:0;">Top Shops nach Netto-Umsatz</h3>
+      <table>
+        <thead><tr><th>#</th><th>Shop</th><th style="text-align:right;">Transaktionen</th><th style="text-align:right;">Einnahmen</th><th style="text-align:right;">Auszahlungen</th><th style="text-align:right;">Netto</th></tr></thead>
+        <tbody id="shopTable"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;">Meistgehandelte Items</h3>
+      <table>
+        <thead><tr><th>#</th><th>Item</th><th style="text-align:right;">Gekauft</th><th style="text-align:right;">Verkauft</th></tr></thead>
+        <tbody id="itemTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h3 style="margin-top:0;">Aktuelle Preisliste (live aus den Shop-Configs)</h3>
+    <div class="sub" style="margin-bottom:8px;">Ankaufspreis = was ein Spieler beim Kauf zahlt. Verkaufspreis = was ein Spieler beim Verkauf an den Shop bekommt.</div>
+    <table>
+      <thead><tr><th>Shop</th><th>Seite</th><th>Item</th><th style="text-align:right;">Ankaufspreis</th><th style="text-align:right;">Verkaufspreis</th></tr></thead>
+      <tbody id="priceTable"></tbody>
+    </table>
+  </div>
+
+  <h2 style="margin-top:32px;">Towny</h2>
+  <div class="sub" id="townyHint"></div>
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="townCount">-</div>
+      <div class="stat-label">Städte insgesamt</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="townBalance">-</div>
+      <div class="stat-label">Gesamtvermögen aller Stadtkassen</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="newTowns">-</div>
+      <div class="stat-label">Neue Städte (24h / 7 Tage)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="newPlots">-</div>
+      <div class="stat-label">Neue Plots gekauft (24h / 7 Tage)</div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:16px;">
+    <h3 style="margin-top:0;">Top Städte nach Kassenstand</h3>
+    <table>
+      <thead><tr><th>#</th><th>Stadt</th><th>Nation</th><th style="text-align:right;">Kasse</th><th style="text-align:right;">Plots</th></tr></thead>
+      <tbody id="townTable"></tbody>
+    </table>
+  </div>
+
+  <h2 style="margin-top:32px;">ChestShops</h2>
+  <div class="sub" id="chestShopHint">Erfasst live über ChestShop-Events - Shops, die vor der Installation dieses Plugins gebaut wurden, tauchen erst nach dem nächsten Bearbeiten/Handel auf.</div>
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="csShopCount">-</div>
+      <div class="stat-label">Bekannte ChestShops</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="csTxCount">-</div>
+      <div class="stat-label">Transaktionen insgesamt</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="csRevenue">-</div>
+      <div class="stat-label">Einnahmen (Käufe)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="csPayouts">-</div>
+      <div class="stat-label">Auszahlungen (Verkäufe)</div>
+    </div>
+  </div>
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <h3 style="margin-top:0;">Top Spieler nach Netto-Umsatz</h3>
+      <table>
+        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Shops</th><th style="text-align:right;">Tx</th><th style="text-align:right;">Netto</th></tr></thead>
+        <tbody id="csOwnerTable"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;">Alle ChestShops</h3>
+      <table>
+        <thead><tr><th>Besitzer</th><th>Item</th><th style="text-align:right;">Menge</th><th style="text-align:right;">Kauf</th><th style="text-align:right;">Verkauf</th></tr></thead>
+        <tbody id="csShopTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2 style="margin-top:32px;">QuickShops</h2>
+  <div class="sub">Registry wird direkt aus QuickShops eigener Shop-Liste gelesen (live, nicht nur aus Events).</div>
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="qsShopCount">-</div>
+      <div class="stat-label">Bekannte QuickShops</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="qsTxCount">-</div>
+      <div class="stat-label">Transaktionen insgesamt</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="qsRevenue">-</div>
+      <div class="stat-label">Einnahmen (Käufe)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="qsPayouts">-</div>
+      <div class="stat-label">Auszahlungen (Verkäufe)</div>
+    </div>
+  </div>
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <h3 style="margin-top:0;">Top Spieler nach Netto-Umsatz</h3>
+      <table>
+        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Shops</th><th style="text-align:right;">Tx</th><th style="text-align:right;">Netto</th></tr></thead>
+        <tbody id="qsOwnerTable"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;">Alle QuickShops</h3>
+      <table>
+        <thead><tr><th>Besitzer</th><th>Item</th><th>Typ</th><th style="text-align:right;">Preis</th></tr></thead>
+        <tbody id="qsShopTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+function formatMoney(n) {
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(n);
+}
+
+function formatPrice(n) {
+  return n === null || n === undefined ? '-' : new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/economy/overview');
+    const data = await res.json();
+
+    document.getElementById('updated').textContent =
+      'Stand: ' + new Date(data.generatedAtMillis).toLocaleString('de-DE');
+    document.getElementById('totalMoney').textContent = formatMoney(data.totalMoney);
+    document.getElementById('playerCount').textContent = data.playerCount;
+    document.getElementById('avgMoney').textContent =
+      data.playerCount > 0 ? formatMoney(data.totalMoney / data.playerCount) : '0';
+
+    const distEl = document.getElementById('distribution');
+    distEl.innerHTML = '';
+    const maxCount = Math.max(1, ...Object.values(data.distribution));
+    for (const [label, count] of Object.entries(data.distribution)) {
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.innerHTML =
+        '<div class="bar-label">' + label + '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + (count / maxCount * 100) + '%"></div></div>' +
+        '<div class="bar-count">' + count + '</div>';
+      distEl.appendChild(row);
+    }
+
+    const tbody = document.getElementById('topTable');
+    tbody.innerHTML = '';
+    data.topBalances.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + p.name + '</td><td style="text-align:right;">' + formatMoney(p.balance) + '</td>';
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    document.getElementById('updated').textContent = 'Fehler beim Laden: ' + e;
+  }
+}
+
+async function refreshTraders() {
+  try {
+    const res = await fetch('/api/traders/overview');
+    const data = await res.json();
+
+    document.getElementById('txCount').textContent = data.totalTransactions;
+    document.getElementById('txRevenue').textContent = formatMoney(data.totalRevenue);
+    document.getElementById('txPayouts').textContent = formatMoney(data.totalPayouts);
+    document.getElementById('txNet').textContent = formatMoney(data.totalNet);
+
+    const shopBody = document.getElementById('shopTable');
+    shopBody.innerHTML = '';
+    data.topShops.forEach((s, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + s.name + '</td><td style="text-align:right;">' + s.transactions +
+        '</td><td style="text-align:right;">' + formatMoney(s.revenue) +
+        '</td><td style="text-align:right;">' + formatMoney(s.payouts) +
+        '</td><td style="text-align:right;">' + formatMoney(s.net) + '</td>';
+      shopBody.appendChild(tr);
+    });
+
+    const itemBody = document.getElementById('itemTable');
+    itemBody.innerHTML = '';
+    data.topItems.forEach((it, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + it.name + '</td><td style="text-align:right;">' + it.boughtQty +
+        '</td><td style="text-align:right;">' + it.soldQty + '</td>';
+      itemBody.appendChild(tr);
+    });
+  } catch (e) {
+    console.error('Fehler beim Laden der Haendlerdaten: ' + e);
+  }
+}
+
+async function refreshPrices() {
+  try {
+    const res = await fetch('/api/traders/prices');
+    const data = await res.json();
+    data.sort((a, b) => (a.shop + a.page + a.item).localeCompare(b.shop + b.page + b.item));
+
+    const body = document.getElementById('priceTable');
+    body.innerHTML = '';
+    data.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + p.shop + '</td><td>' + p.page + '</td><td>' + p.item +
+        '</td><td style="text-align:right;">' + formatPrice(p.buyPrice) +
+        '</td><td style="text-align:right;">' + formatPrice(p.sellPrice) + '</td>';
+      body.appendChild(tr);
+    });
+  } catch (e) {
+    console.error('Fehler beim Laden der Preisliste: ' + e);
+  }
+}
+
+async function refreshTowny() {
+  try {
+    const res = await fetch('/api/towny/overview');
+    const data = await res.json();
+
+    document.getElementById('townyHint').textContent =
+      data.totalTowns === 0 ? 'Kein Towny gefunden oder noch keine Staedte gegruendet.' : '';
+    document.getElementById('townCount').textContent = data.totalTowns;
+    document.getElementById('townBalance').textContent = formatMoney(data.totalTownBalance);
+    document.getElementById('newTowns').textContent = data.newTownsLast24h + ' / ' + data.newTownsLast7d;
+    document.getElementById('newPlots').textContent = data.newPlotsLast24h + ' / ' + data.newPlotsLast7d;
+
+    const body = document.getElementById('townTable');
+    body.innerHTML = '';
+    data.topTowns.forEach((t, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + t.name + '</td><td>' + (t.nation || '-') +
+        '</td><td style="text-align:right;">' + formatMoney(t.balance) +
+        '</td><td style="text-align:right;">' + t.plots + '</td>';
+      body.appendChild(tr);
+    });
+  } catch (e) {
+    console.error('Fehler beim Laden der Towny-Daten: ' + e);
+  }
+}
+
+async function refreshChestShops() {
+  try {
+    const res = await fetch('/api/chestshops/overview');
+    const data = await res.json();
+
+    document.getElementById('csShopCount').textContent = data.totalShops;
+    document.getElementById('csTxCount').textContent = data.totalTransactions;
+    document.getElementById('csRevenue').textContent = formatMoney(data.totalRevenue);
+    document.getElementById('csPayouts').textContent = formatMoney(data.totalPayouts);
+
+    const ownerBody = document.getElementById('csOwnerTable');
+    ownerBody.innerHTML = '';
+    data.topOwners.forEach((o, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + o.owner + '</td><td style="text-align:right;">' + o.shopCount +
+        '</td><td style="text-align:right;">' + o.transactions + '</td><td style="text-align:right;">' + formatMoney(o.net) + '</td>';
+      ownerBody.appendChild(tr);
+    });
+
+    const shopBody = document.getElementById('csShopTable');
+    shopBody.innerHTML = '';
+    data.shops.forEach((s) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + s.owner + '</td><td>' + s.item + '</td><td style="text-align:right;">' + s.quantity +
+        '</td><td style="text-align:right;">' + formatPrice(s.buyPrice) +
+        '</td><td style="text-align:right;">' + formatPrice(s.sellPrice) + '</td>';
+      shopBody.appendChild(tr);
+    });
+  } catch (e) {
+    console.error('Fehler beim Laden der ChestShop-Daten: ' + e);
+  }
+}
+
+async function refreshQuickShops() {
+  try {
+    const res = await fetch('/api/quickshops/overview');
+    const data = await res.json();
+
+    document.getElementById('qsShopCount').textContent = data.totalShops;
+    document.getElementById('qsTxCount').textContent = data.totalTransactions;
+    document.getElementById('qsRevenue').textContent = formatMoney(data.totalRevenue);
+    document.getElementById('qsPayouts').textContent = formatMoney(data.totalPayouts);
+
+    const ownerBody = document.getElementById('qsOwnerTable');
+    ownerBody.innerHTML = '';
+    data.topOwners.forEach((o, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + o.owner + '</td><td style="text-align:right;">' + o.shopCount +
+        '</td><td style="text-align:right;">' + o.transactions + '</td><td style="text-align:right;">' + formatMoney(o.net) + '</td>';
+      ownerBody.appendChild(tr);
+    });
+
+    const shopBody = document.getElementById('qsShopTable');
+    shopBody.innerHTML = '';
+    data.shops.forEach((s) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + s.owner + '</td><td>' + s.item + '</td><td>' + (s.shopBuys ? 'kauft an' : 'verkauft') +
+        '</td><td style="text-align:right;">' + formatPrice(s.price) + '</td>';
+      shopBody.appendChild(tr);
+    });
+  } catch (e) {
+    console.error('Fehler beim Laden der QuickShop-Daten: ' + e);
+  }
+}
+
+let searchDebounce = null;
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  clearTimeout(searchDebounce);
+  const query = e.target.value.trim();
+  const resultsEl = document.getElementById('searchResults');
+  if (query.length < 2) {
+    resultsEl.style.display = 'none';
+    return;
+  }
+  searchDebounce = setTimeout(() => runSearch(query), 250);
+});
+
+async function runSearch(query) {
+  const resultsEl = document.getElementById('searchResults');
+  try {
+    const res = await fetch('/api/search?q=' + encodeURIComponent(query));
+    const data = await res.json();
+
+    let html = '';
+
+    html += '<div class="search-section"><h4>Spieler</h4>';
+    html += data.players.length ? data.players.map(p =>
+      '<div class="bar-row"><div style="flex:1;">' + p.name + '</div><div>' + formatMoney(p.balance) + '</div></div>'
+    ).join('') : '<div class="empty-hint">keine Treffer</div>';
+    html += '</div>';
+
+    html += '<div class="search-section"><h4>Shops</h4>';
+    html += data.shops.length ? data.shops.map(s =>
+      '<div class="bar-row"><div style="flex:1;">' + s.name + '</div><div>' + s.transactions + ' Tx, Netto ' + formatMoney(s.net) + '</div></div>'
+    ).join('') : '<div class="empty-hint">keine Treffer</div>';
+    html += '</div>';
+
+    html += '<div class="search-section"><h4>Items</h4>';
+    html += data.items.length ? data.items.map(it =>
+      '<div class="bar-row"><div style="flex:1;">' + it.name + '</div><div>Kauf: ' + formatPrice(it.buyPrice) +
+      ' | Verkauf: ' + formatPrice(it.sellPrice) + ' | Historie: ' + it.boughtQty + '/' + it.soldQty + '</div></div>'
+    ).join('') : '<div class="empty-hint">keine Treffer</div>';
+    html += '</div>';
+
+    html += '<div class="search-section"><h4>ChestShops</h4>';
+    html += data.chestShops.length ? data.chestShops.map(s =>
+      '<div class="bar-row"><div style="flex:1;">' + s.owner + ' - ' + s.item + '</div><div>Kauf: ' + formatPrice(s.buyPrice) +
+      ' | Verkauf: ' + formatPrice(s.sellPrice) + '</div></div>'
+    ).join('') : '<div class="empty-hint">keine Treffer</div>';
+    html += '</div>';
+
+    html += '<div class="search-section"><h4>QuickShops</h4>';
+    html += data.quickShops.length ? data.quickShops.map(s =>
+      '<div class="bar-row"><div style="flex:1;">' + s.owner + ' - ' + s.item + '</div><div>' +
+      (s.shopBuys ? 'kauft an' : 'verkauft') + ': ' + formatPrice(s.price) + '</div></div>'
+    ).join('') : '<div class="empty-hint">keine Treffer</div>';
+    html += '</div>';
+
+    resultsEl.innerHTML = html;
+    resultsEl.style.display = 'block';
+  } catch (e) {
+    resultsEl.innerHTML = '<div class="empty-hint">Fehler bei der Suche: ' + e + '</div>';
+    resultsEl.style.display = 'block';
+  }
+}
+
+refresh();
+refreshTraders();
+refreshPrices();
+refreshTowny();
+refreshChestShops();
+refreshQuickShops();
+setInterval(refresh, 30000);
+setInterval(refreshTraders, 30000);
+setInterval(refreshPrices, 30000);
+setInterval(refreshTowny, 30000);
+setInterval(refreshChestShops, 30000);
+setInterval(refreshQuickShops, 30000);
+</script>
+</body>
+</html>

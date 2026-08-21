@@ -1,0 +1,57 @@
+package com.thedomibusiness.economydashboard.quickshop;
+
+import org.bukkit.plugin.Plugin;
+
+import java.io.File;
+import java.sql.SQLException;
+import java.util.Collections;
+import java.util.List;
+import java.util.logging.Level;
+
+public class QuickShopService implements AutoCloseable {
+
+    private static final int SHOP_LIST_LIMIT = 500;
+    private static final int TOP_OWNERS_LIMIT = 10;
+
+    private final Plugin plugin;
+    private final QuickShopDatabase db;
+    private final QuickShopRegistryCollector registryCollector;
+
+    public QuickShopService(Plugin plugin) throws SQLException {
+        this.plugin = plugin;
+        this.db = new QuickShopDatabase(new File(plugin.getDataFolder(), "quickshop.db"));
+        this.registryCollector = new QuickShopRegistryCollector();
+        plugin.getServer().getPluginManager().registerEvents(new QuickShopListener(plugin, db), plugin);
+    }
+
+    public void refreshRegistry() {
+        try {
+            db.replaceShops(registryCollector.collect());
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Konnte QuickShop-Registry nicht aktualisieren", e);
+        }
+    }
+
+    public QuickShopSnapshot snapshotNow() {
+        try {
+            return db.snapshot(SHOP_LIST_LIMIT, TOP_OWNERS_LIMIT);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "Konnte QuickShop-Snapshot nicht aus der Datenbank lesen", e);
+            return QuickShopSnapshot.empty();
+        }
+    }
+
+    public List<QuickShopSnapshot.ShopListing> searchShops(String query, int limit) {
+        try {
+            return db.searchShops(query, limit);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "QuickShop-Suche fehlgeschlagen", e);
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    public void close() {
+        db.close();
+    }
+}
