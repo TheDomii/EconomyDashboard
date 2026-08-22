@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wirtschaft - Server-Wirtschaft Dashboard</title>
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -13,25 +14,15 @@
     <a href="/towny.html">Towny</a>
     <a href="/quickshops.html">QuickShops</a>
     <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <a href="/players.html">Spieler</a>
+    <a href="/archiv.html">Archiv</a>
     <span class="spacer"></span>
+    <button id="reloadBtn" class="reload-btn" title="Jetzt aktualisieren"><span class="icon">↻</span> Aktualisieren</button>
     <a href="/logout" class="logout">Abmelden</a>
   </nav>
 
   <h1>Wirtschaft</h1>
   <div class="sub" id="updated">lade...</div>
-
-  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
-  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
-
-  <div class="panel" style="margin-bottom:16px;">
-    <h3 style="margin-top:0;">Spieler filtern / als CSV exportieren</h3>
-    <div class="export-panel" id="export-players" style="border-top:none; margin-top:0; padding-top:0;">
-      <input type="text" placeholder="Name enthält..." data-param="name">
-      <input type="number" placeholder="Min. Guthaben" data-param="minBalance">
-      <input type="number" placeholder="Max. Guthaben" data-param="maxBalance">
-      <button onclick="exportCsv('export-players', '/api/economy/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
 
   <div class="grid">
     <div class="panel">
@@ -48,6 +39,14 @@
     </div>
   </div>
 
+  <div class="panel" style="margin-top:16px;">
+    <h3 style="margin-top:0;">Geldmenge über Zeit</h3>
+    <div class="sub" style="margin-bottom:8px;">Trend der letzten 30 Tage (Tagesdurchschnitt). Gestrichelte Linie = Durchschnitt über den Zeitraum, Punkt = höchster Stand.</div>
+    <div id="moneyChart"></div>
+    <div class="trend-stats" id="moneyStats"></div>
+    <div style="margin-top:12px;"><button class="reload-btn" onclick="window.location.href='/api/economy/history/export.csv'">CSV herunterladen</button></div>
+  </div>
+
   <div class="grid" style="margin-top:16px;">
     <div class="panel">
       <h3 style="margin-top:0;">Verteilung nach Kontostand</h3>
@@ -55,7 +54,7 @@
     </div>
     <div class="panel">
       <div class="table-toolbar">
-        <h3 style="margin:0;">Reichste Spieler</h3>
+        <h3 style="margin:0;">Spieler</h3>
         <div class="page-size-select">
           Anzeigen:
           <select id="pageSize" onchange="renderTable()">
@@ -66,8 +65,14 @@
           </select>
         </div>
       </div>
+      <div class="filter-row" id="filter-players">
+        <input type="text" placeholder="Name enthält..." data-param="name">
+        <input type="number" placeholder="Min. Guthaben" data-param="minBalance">
+        <input type="number" placeholder="Max. Guthaben" data-param="maxBalance">
+        <button onclick="exportCsv('filter-players', '/api/economy/export.csv')">CSV herunterladen</button>
+      </div>
       <table>
-        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Guthaben</th></tr></thead>
+        <thead><tr id="topTableHead"><th>#</th><th data-sort="name">Spieler</th><th style="text-align:right;" data-sort="balance">Guthaben</th></tr></thead>
         <tbody id="topTable"></tbody>
       </table>
       <div class="sub count-hint" id="countHint"></div>
@@ -77,19 +82,88 @@
 <script src="/app.js"></script>
 <script>
 let allBalances = [];
+let filteredBalances = [];
+
+function matchPlayer(values) {
+  return allBalances.filter((p) => {
+    if (values.name && !p.name.toLowerCase().includes(values.name.toLowerCase())) return false;
+    if (values.minBalance && p.balance < parseFloat(values.minBalance)) return false;
+    if (values.maxBalance && p.balance > parseFloat(values.maxBalance)) return false;
+    return true;
+  });
+}
 
 function renderTable() {
   const size = pageSizeValue(document.getElementById('pageSize'));
-  const shown = sliceForDisplay(allBalances, size);
+  const sorted = applySort(filteredBalances, playerSort);
+  const shown = sliceForDisplay(sorted, size);
   const tbody = document.getElementById('topTable');
   tbody.innerHTML = '';
+  if (shown.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-hint">keine Treffer</td></tr>';
+  }
   shown.forEach((p, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + p.name + '</td><td style="text-align:right;">' + formatMoney(p.balance) + '</td>';
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + playerLink(p.name) + '</td><td style="text-align:right;">' + formatMoney(p.balance) + '</td>';
     tbody.appendChild(tr);
   });
   document.getElementById('countHint').textContent =
-    shown.length + ' von ' + allBalances.length + ' Spielern angezeigt.';
+    shown.length + ' von ' + filteredBalances.length + ' gefiltert (' + allBalances.length + ' insgesamt).';
+}
+
+const playerSort = wireSortableTable(document.getElementById('topTableHead'), renderTable);
+
+const reapplyPlayerFilter = initClientFilterTable('filter-players', matchPlayer, (filtered) => {
+  filteredBalances = filtered;
+  renderTable();
+});
+
+function average(values) {
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+}
+
+async function refreshHistory() {
+  try {
+    const res = await fetch('/api/economy/history');
+    const data = await res.json();
+    const chartEl = document.getElementById('moneyChart');
+    const statsEl = document.getElementById('moneyStats');
+    statsEl.innerHTML = '';
+
+    if (!data.dailyPoints || data.dailyPoints.length === 0) {
+      renderTrendChart(chartEl, []);
+      return;
+    }
+
+    const chron = data.dailyPoints.slice().reverse();
+    const values = chron.map((d) => d.avgMoney);
+    renderTrendChart(chartEl, chron.map((d) => ({ label: d.day.slice(5), value: d.avgMoney })));
+
+    const avg = average(values);
+    let peak = chron[0];
+    chron.forEach((d) => { if (d.avgMoney > peak.avgMoney) peak = d; });
+
+    let trendHtml = '<div class="trend-stat"><div class="trend-stat-value">–</div><div class="trend-stat-label">Trend (braucht mehr Tage)</div></div>';
+    if (chron.length >= 4) {
+      const half = Math.floor(chron.length / 2);
+      const olderAvg = average(values.slice(0, half));
+      const recentAvg = average(values.slice(values.length - half));
+      if (olderAvg > 0) {
+        const pct = ((recentAvg - olderAvg) / olderAvg) * 100;
+        const cls = pct > 1 ? 'up' : pct < -1 ? 'down' : '';
+        const arrow = pct > 1 ? '▲' : pct < -1 ? '▼' : '▬';
+        trendHtml = '<div class="trend-stat"><div class="trend-stat-value ' + cls + '">' + arrow + ' ' + (pct >= 0 ? '+' : '') + pct.toFixed(0) + '%</div>' +
+          '<div class="trend-stat-label">Trend (2. Hälfte vs. 1. Hälfte)</div></div>';
+      }
+    }
+
+    statsEl.innerHTML =
+      '<div class="trend-stat"><div class="trend-stat-value">' + formatMoney(avg) + '</div><div class="trend-stat-label">Ø Geldmenge</div></div>' +
+      trendHtml +
+      '<div class="trend-stat"><div class="trend-stat-value">' + formatMoney(peak.avgMoney) + '</div><div class="trend-stat-label">Höchststand (' + peak.day + ')</div></div>';
+  } catch (e) {
+    console.error('Fehler beim Laden des Geldmengen-Verlaufs: ' + e);
+  }
 }
 
 async function refresh() {
@@ -118,14 +192,17 @@ async function refresh() {
     }
 
     allBalances = data.allBalances;
-    renderTable();
+    reapplyPlayerFilter();
   } catch (e) {
     document.getElementById('updated').textContent = 'Fehler beim Laden: ' + e;
   }
 }
 
+wireReloadButton([refresh, refreshHistory]);
 refresh();
+refreshHistory();
 setInterval(refresh, 30000);
+setInterval(refreshHistory, 60000);
 </script>
 </body>
 </html>

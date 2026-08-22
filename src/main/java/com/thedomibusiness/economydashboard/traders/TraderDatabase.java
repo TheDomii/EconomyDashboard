@@ -2,6 +2,7 @@ package com.thedomibusiness.economydashboard.traders;
 
 import com.thedomibusiness.economydashboard.filter.TransactionFilter;
 import com.thedomibusiness.economydashboard.web.CsvBuilder;
+import com.thedomibusiness.economydashboard.web.JsonUtil;
 
 import java.io.File;
 import java.sql.Connection;
@@ -53,10 +54,18 @@ public class TraderDatabase implements AutoCloseable {
     }
 
     public void rollbackBatch() {
+        // setAutoCommit(true) must run even if rollback() itself throws (e.g. a failed write
+        // already made SQLite drop the transaction, so there's nothing left to roll back) -
+        // otherwise the connection stays stuck in manual-commit mode forever. See
+        // QuickShopDatabase#replaceShops for the incident that surfaced this exact bug pattern.
         try {
             connection.rollback();
-            connection.setAutoCommit(true);
         } catch (SQLException ignored) {
+        } finally {
+            try {
+                connection.setAutoCommit(true);
+            } catch (SQLException ignored) {
+            }
         }
     }
 
@@ -187,56 +196,64 @@ public class TraderDatabase implements AutoCloseable {
         return items;
     }
 
+    private static class FilterSql {
+        final StringBuilder where = new StringBuilder(" WHERE 1=1");
+        final List<Object> params = new ArrayList<>();
+    }
+
+    private FilterSql buildFilterSql(TransactionFilter filter) {
+        FilterSql f = new FilterSql();
+        if (filter.fromMillis != null) {
+            f.where.append(" AND timestamp_millis >= ?");
+            f.params.add(filter.fromMillis);
+        }
+        if (filter.toMillis != null) {
+            f.where.append(" AND timestamp_millis <= ?");
+            f.params.add(filter.toMillis);
+        }
+        if (filter.type != null) {
+            f.where.append(" AND type = ?");
+            f.params.add(filter.type.toUpperCase());
+        }
+        if (filter.player != null) {
+            f.where.append(" AND player LIKE ? COLLATE NOCASE");
+            f.params.add("%" + filter.player + "%");
+        }
+        if (filter.counterparty != null) {
+            f.where.append(" AND shop LIKE ? COLLATE NOCASE");
+            f.params.add("%" + filter.counterparty + "%");
+        }
+        if (filter.item != null) {
+            f.where.append(" AND item_name LIKE ? COLLATE NOCASE");
+            f.params.add("%" + filter.item + "%");
+        }
+        if (filter.minPrice != null) {
+            f.where.append(" AND price >= ?");
+            f.params.add(filter.minPrice);
+        }
+        if (filter.maxPrice != null) {
+            f.where.append(" AND price <= ?");
+            f.params.add(filter.maxPrice);
+        }
+        return f;
+    }
+
     /**
      * Raw (non-aggregated) transaction rows for CSV export/external analysis,
      * with optional filters. Newest first.
      */
     public String exportTransactionsCsv(TransactionFilter filter) throws SQLException {
-        StringBuilder where = new StringBuilder(" WHERE 1=1");
-        List<Object> params = new ArrayList<>();
-
-        if (filter.fromMillis != null) {
-            where.append(" AND timestamp_millis >= ?");
-            params.add(filter.fromMillis);
-        }
-        if (filter.toMillis != null) {
-            where.append(" AND timestamp_millis <= ?");
-            params.add(filter.toMillis);
-        }
-        if (filter.type != null) {
-            where.append(" AND type = ?");
-            params.add(filter.type.toUpperCase());
-        }
-        if (filter.player != null) {
-            where.append(" AND player LIKE ? COLLATE NOCASE");
-            params.add("%" + filter.player + "%");
-        }
-        if (filter.counterparty != null) {
-            where.append(" AND shop LIKE ? COLLATE NOCASE");
-            params.add("%" + filter.counterparty + "%");
-        }
-        if (filter.item != null) {
-            where.append(" AND item_name LIKE ? COLLATE NOCASE");
-            params.add("%" + filter.item + "%");
-        }
-        if (filter.minPrice != null) {
-            where.append(" AND price >= ?");
-            params.add(filter.minPrice);
-        }
-        if (filter.maxPrice != null) {
-            where.append(" AND price <= ?");
-            params.add(filter.maxPrice);
-        }
+        FilterSql f = buildFilterSql(filter);
 
         String sql = "SELECT timestamp_millis, type, player, shop, page, item_name, item_amount, price FROM transactions"
-                + where + " ORDER BY timestamp_millis DESC LIMIT ?";
-        params.add(filter.limit);
+                + f.where + " ORDER BY timestamp_millis DESC LIMIT ?";
+        f.params.add(filter.limit);
 
         CsvBuilder csv = new CsvBuilder();
         csv.header("timestamp", "type", "player", "shop", "page", "item", "amount", "price");
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            for (int i = 0; i < params.size(); i++) {
-                ps.setObject(i + 1, params.get(i));
+            for (int i = 0; i < f.params.size(); i++) {
+                ps.setObject(i + 1, f.params.get(i));
             }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -247,6 +264,114 @@ public class TraderDatabase implements AutoCloseable {
             }
         }
         return csv.build();
+    }
+
+    /**
+     * Same rows as {@link #exportTransactionsCsv}, as a JSON array - for the live, filtered
+     * table preview on the dashboard page (the CSV export stays the "download everything
+     * matching" path with its own, usually much higher, limit).
+     */
+    public String queryTransactionsJson(TransactionFilter filter) throws SQLException {
+        FilterSql f = buildFilterSql(filter);
+
+        String sql = "SELECT timestamp_millis, type, player, shop, page, item_name, item_amount, price FROM transactions"
+                + f.where + " ORDER BY timestamp_millis DESC LIMIT ?";
+        f.params.add(filter.limit);
+
+        StringBuilder json = new StringBuilder("[");
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (int i = 0; i < f.params.size(); i++) {
+                ps.setObject(i + 1, f.params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    first = false;
+                    json.append("{\"timestamp\":").append(rs.getLong(1)).append(",")
+                            .append("\"type\":").append(JsonUtil.quoteOrNull(rs.getString(2))).append(",")
+                            .append("\"player\":").append(JsonUtil.quoteOrNull(rs.getString(3))).append(",")
+                            .append("\"shop\":").append(JsonUtil.quoteOrNull(rs.getString(4))).append(",")
+                            .append("\"page\":").append(JsonUtil.quoteOrNull(rs.getString(5))).append(",")
+                            .append("\"item\":").append(JsonUtil.quoteOrNull(rs.getString(6))).append(",")
+                            .append("\"amount\":").append(rs.getInt(7)).append(",")
+                            .append("\"price\":").append(JsonUtil.money(rs.getDouble(8)))
+                            .append("}");
+                }
+            }
+        }
+        json.append("]");
+        return json.toString();
+    }
+
+    /** Most recent transactions as human-readable activity lines, newest first - for the "Live-Aktivität" feed. */
+    public List<com.thedomibusiness.economydashboard.activity.ActivityEvent> recentActivity(int limit) throws SQLException {
+        List<com.thedomibusiness.economydashboard.activity.ActivityEvent> result = new ArrayList<>();
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT timestamp_millis, type, player, shop, item_name, item_amount, price FROM transactions " +
+                        "ORDER BY timestamp_millis DESC LIMIT ?")) {
+            ps.setInt(1, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    long ts = rs.getLong(1);
+                    String type = rs.getString(2);
+                    String player = rs.getString(3);
+                    String shop = rs.getString(4);
+                    String item = rs.getString(5);
+                    int amount = rs.getInt(6);
+                    double price = rs.getDouble(7);
+                    String desc;
+                    if ("BUY".equals(type)) {
+                        desc = player + " kaufte " + (item != null ? amount + "x " + item : "etwas") + " bei " + shop + " fuer " + JsonUtil.money(price);
+                    } else if ("SELL".equals(type)) {
+                        desc = player + " verkaufte " + (item != null ? amount + "x " + item : "etwas") + " an " + shop + " fuer " + JsonUtil.money(price);
+                    } else {
+                        desc = player + " handelte bei " + shop + " fuer " + JsonUtil.money(price);
+                    }
+                    result.add(new com.thedomibusiness.economydashboard.activity.ActivityEvent(ts, "dtlTradersPlus", player, desc));
+                }
+            }
+        }
+        return result;
+    }
+
+    /** One row per (item, player) with their total sold quantity - raw material for anomaly detection. */
+    public List<com.thedomibusiness.economydashboard.anomaly.SellVolumeRow> sellVolumeByItemAndPlayer() throws SQLException {
+        List<com.thedomibusiness.economydashboard.anomaly.SellVolumeRow> result = new ArrayList<>();
+        try (Statement st = connection.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT item_name, player, SUM(item_amount) FROM transactions " +
+                             "WHERE type = 'SELL' AND item_name IS NOT NULL AND player IS NOT NULL " +
+                             "GROUP BY item_name, player")) {
+            while (rs.next()) {
+                result.add(new com.thedomibusiness.economydashboard.anomaly.SellVolumeRow(
+                        rs.getString(1), rs.getString(2), rs.getLong(3), "dtlTradersPlus"));
+            }
+        }
+        return result;
+    }
+
+    /** Aggregate stats for one player, for the cross-module player profile page. */
+    public String playerSummaryJson(String playerName) throws SQLException {
+        int transactions = 0;
+        double spent = 0;
+        double earned = 0;
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT COUNT(*), " +
+                        "COALESCE(SUM(CASE WHEN type = 'BUY' THEN price ELSE 0 END), 0), " +
+                        "COALESCE(SUM(CASE WHEN type = 'SELL' THEN price ELSE 0 END), 0) " +
+                        "FROM transactions WHERE player = ? COLLATE NOCASE")) {
+            ps.setString(1, playerName);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    transactions = rs.getInt(1);
+                    spent = rs.getDouble(2);
+                    earned = rs.getDouble(3);
+                }
+            }
+        }
+        return "{\"transactions\":" + transactions + ",\"spent\":" + JsonUtil.money(spent)
+                + ",\"earned\":" + JsonUtil.money(earned) + "}";
     }
 
     @Override

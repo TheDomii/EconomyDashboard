@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Towny - Server-Wirtschaft Dashboard</title>
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -13,29 +14,24 @@
     <a href="/towny.html" class="active">Towny</a>
     <a href="/quickshops.html">QuickShops</a>
     <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <a href="/players.html">Spieler</a>
+    <a href="/archiv.html">Archiv</a>
     <span class="spacer"></span>
+    <button id="reloadBtn" class="reload-btn" title="Jetzt aktualisieren"><span class="icon">↻</span> Aktualisieren</button>
     <a href="/logout" class="logout">Abmelden</a>
   </nav>
 
   <h1>Towny</h1>
   <div class="sub" id="townyHint">lade...</div>
 
-  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
-  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
-
-  <div class="panel" style="margin-bottom:16px;">
-    <h3 style="margin-top:0;">Städte filtern / als CSV exportieren</h3>
-    <div class="export-panel" id="export-towns" style="border-top:none; margin-top:0; padding-top:0;">
-      <input type="text" placeholder="Name enthält..." data-param="name">
-      <input type="number" placeholder="Min. Kasse" data-param="minBalance">
-      <button onclick="exportCsv('export-towns', '/api/towny/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
-
   <div class="grid">
     <div class="panel">
       <div class="stat-value" id="townCount">-</div>
       <div class="stat-label">Städte insgesamt</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="nationCount">-</div>
+      <div class="stat-label">Nationen</div>
     </div>
     <div class="panel">
       <div class="stat-value" id="townBalance">-</div>
@@ -50,9 +46,30 @@
       <div class="stat-label">Neue Plots gekauft (24h / 7 Tage)</div>
     </div>
   </div>
-  <div class="panel" style="margin-top:16px;">
+  <div class="panel" style="margin-top:16px;" id="nationsPanel">
     <div class="table-toolbar">
-      <h3 style="margin:0;">Städte nach Kassenstand</h3>
+      <h3 style="margin:0;">Nationen</h3>
+    </div>
+    <div class="filter-row" id="filter-nations">
+      <input type="text" placeholder="Name enthält..." data-param="name">
+      <button onclick="exportCsv('filter-nations', '/api/towny/nations/export.csv')">CSV herunterladen</button>
+    </div>
+    <table>
+      <thead><tr id="nationTableHead">
+        <th data-sort="name">Nation</th>
+        <th data-sort="capital">Hauptstadt</th>
+        <th style="text-align:right;" data-sort="townCount">Städte</th>
+        <th style="text-align:right;" data-sort="residentCount">Einwohner</th>
+        <th style="text-align:right;" data-sort="totalBalance">Gesamtkasse</th>
+      </tr></thead>
+      <tbody id="nationTable"></tbody>
+    </table>
+    <div class="sub count-hint" id="nationCountHint"></div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;" id="staedte">
+    <div class="table-toolbar">
+      <h3 style="margin:0;">Städte</h3>
       <div class="page-size-select">
         Anzeigen:
         <select id="pageSize" onchange="renderTable()">
@@ -63,8 +80,14 @@
         </select>
       </div>
     </div>
+    <div class="filter-row" id="filter-towns">
+      <input type="text" placeholder="Name enthält..." data-param="name">
+      <input type="text" placeholder="Nation enthält..." data-param="nation">
+      <input type="number" placeholder="Min. Kasse" data-param="minBalance">
+      <button onclick="exportCsv('filter-towns', '/api/towny/export.csv')">CSV herunterladen</button>
+    </div>
     <table>
-      <thead><tr><th>#</th><th>Stadt</th><th>Nation</th><th style="text-align:right;">Kasse</th><th style="text-align:right;">Plots</th></tr></thead>
+      <thead><tr id="townTableHead"><th>#</th><th data-sort="name">Stadt</th><th data-sort="nation">Nation</th><th style="text-align:right;" data-sort="balance">Kasse</th><th style="text-align:right;" data-sort="plots">Plots</th></tr></thead>
       <tbody id="townTable"></tbody>
     </table>
     <div class="sub count-hint" id="countHint"></div>
@@ -73,21 +96,87 @@
 <script src="/app.js"></script>
 <script>
 let allTowns = [];
+let filteredTowns = [];
+let allNations = [];
+let filteredNations = [];
+
+function renderNationTable() {
+  const sorted = applySort(filteredNations, nationSort);
+  const body = document.getElementById('nationTable');
+  body.innerHTML = '';
+  if (sorted.length === 0) {
+    body.innerHTML = '<tr><td colspan="5" class="empty-hint">keine Treffer</td></tr>';
+  }
+  sorted.forEach((n) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td></td><td>' + escapeHtml(n.capital || '-') +
+      '</td><td style="text-align:right;">' + formatNumber(n.townCount) +
+      '</td><td style="text-align:right;">' + formatNumber(n.residentCount) +
+      '</td><td style="text-align:right;">' + formatMoney(n.totalBalance) + '</td>';
+    const link = document.createElement('a');
+    link.href = '#staedte';
+    link.textContent = n.name;
+    link.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      filterTownsByNation(n.name);
+    });
+    tr.firstElementChild.appendChild(link);
+    body.appendChild(tr);
+  });
+  document.getElementById('nationCountHint').textContent =
+    sorted.length + ' von ' + filteredNations.length + ' gefiltert (' + allNations.length + ' insgesamt).';
+}
+
+const nationSort = wireSortableTable(document.getElementById('nationTableHead'), renderNationTable);
+
+const reapplyNationFilter = initClientFilterTable('filter-nations', (v) =>
+  allNations.filter((n) => !v.name || n.name.toLowerCase().includes(v.name.toLowerCase())), (filtered) => {
+  filteredNations = filtered;
+  renderNationTable();
+});
+
+function filterTownsByNation(name) {
+  const input = document.querySelector('#filter-towns input[data-param="nation"]');
+  input.value = name;
+  input.dispatchEvent(new Event('input'));
+  document.getElementById('staedte').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function matchTown(values) {
+  return allTowns.filter((t) => {
+    if (values.name && !t.name.toLowerCase().includes(values.name.toLowerCase())) return false;
+    if (values.nation && !(t.nation || '').toLowerCase().includes(values.nation.toLowerCase())) return false;
+    if (values.minBalance && t.balance < parseFloat(values.minBalance)) return false;
+    return true;
+  });
+}
 
 function renderTable() {
   const size = pageSizeValue(document.getElementById('pageSize'));
-  const shown = sliceForDisplay(allTowns, size);
+  const sorted = applySort(filteredTowns, townSort);
+  const shown = sliceForDisplay(sorted, size);
   const body = document.getElementById('townTable');
   body.innerHTML = '';
+  if (shown.length === 0) {
+    body.innerHTML = '<tr><td colspan="5" class="empty-hint">keine Treffer</td></tr>';
+  }
   shown.forEach((t, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + t.name + '</td><td>' + (t.nation || '-') +
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + escapeHtml(t.name) + '</td><td>' + escapeHtml(t.nation || '-') +
       '</td><td style="text-align:right;">' + formatMoney(t.balance) +
       '</td><td style="text-align:right;">' + formatNumber(t.plots) + '</td>';
     body.appendChild(tr);
   });
-  document.getElementById('countHint').textContent = shown.length + ' von ' + allTowns.length + ' Städten angezeigt.';
+  document.getElementById('countHint').textContent =
+    shown.length + ' von ' + filteredTowns.length + ' gefiltert (' + allTowns.length + ' insgesamt).';
 }
+
+const townSort = wireSortableTable(document.getElementById('townTableHead'), renderTable);
+
+const reapplyTownFilter = initClientFilterTable('filter-towns', matchTown, (filtered) => {
+  filteredTowns = filtered;
+  renderTable();
+});
 
 async function refreshTowny() {
   try {
@@ -97,17 +186,22 @@ async function refreshTowny() {
     document.getElementById('townyHint').textContent =
       data.totalTowns === 0 ? 'Kein Towny gefunden oder noch keine Staedte gegruendet.' : 'Stand: ' + new Date(data.generatedAtMillis).toLocaleString('de-DE');
     document.getElementById('townCount').textContent = formatNumber(data.totalTowns);
+    document.getElementById('nationCount').textContent = formatNumber((data.nations || []).length);
     document.getElementById('townBalance').textContent = formatMoney(data.totalTownBalance);
     document.getElementById('newTowns').textContent = formatNumber(data.newTownsLast24h) + ' / ' + formatNumber(data.newTownsLast7d);
     document.getElementById('newPlots').textContent = formatNumber(data.newPlotsLast24h) + ' / ' + formatNumber(data.newPlotsLast7d);
 
     allTowns = data.allTowns;
-    renderTable();
+    reapplyTownFilter();
+
+    allNations = data.nations || [];
+    reapplyNationFilter();
   } catch (e) {
     console.error('Fehler beim Laden der Towny-Daten: ' + e);
   }
 }
 
+wireReloadButton([refreshTowny]);
 refreshTowny();
 setInterval(refreshTowny, 30000);
 </script>

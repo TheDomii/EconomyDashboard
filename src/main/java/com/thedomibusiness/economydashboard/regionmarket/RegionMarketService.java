@@ -68,6 +68,33 @@ public class RegionMarketService {
         }
     }
 
+    public String queryTransactionsJson(TransactionFilter filter) {
+        try {
+            return db.queryTransactionsJson(filter);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "Gefilterte AdvancedRegionMarket-Transaktionen konnten nicht geladen werden", e);
+            return "[]";
+        }
+    }
+
+    public String playerSummaryJson(String playerName) {
+        try {
+            return db.playerSummaryJson(playerName);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "AdvancedRegionMarket-Spielerprofil konnte nicht geladen werden", e);
+            return "null";
+        }
+    }
+
+    public List<com.thedomibusiness.economydashboard.activity.ActivityEvent> recentActivity(int limit) {
+        try {
+            return db.recentActivity(limit);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "AdvancedRegionMarket-Aktivitaet konnte nicht geladen werden", e);
+            return Collections.emptyList();
+        }
+    }
+
     public void close() {
         db.close();
     }

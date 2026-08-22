@@ -19,6 +19,22 @@ public class TownySnapshot {
         }
     }
 
+    public static class NationStats {
+        public final String name;
+        public final String capital;
+        public final int townCount;
+        public final int residentCount;
+        public final double totalBalance;
+
+        public NationStats(String name, String capital, int townCount, int residentCount, double totalBalance) {
+            this.name = name;
+            this.capital = capital;
+            this.townCount = townCount;
+            this.residentCount = residentCount;
+            this.totalBalance = totalBalance;
+        }
+    }
+
     public final long generatedAtMillis;
     public final int totalTowns;
     public final double totalTownBalance;
@@ -29,10 +45,12 @@ public class TownySnapshot {
     public final List<TownStats> topTowns;
     /** Every town, unsorted-cap - used for CSV export/filtering. */
     public final List<TownStats> allTowns;
+    /** Every nation, sorted by total member-town balance descending. */
+    public final List<NationStats> nations;
 
     public TownySnapshot(long generatedAtMillis, int totalTowns, double totalTownBalance,
                           int newTownsLast24h, int newTownsLast7d, int newPlotsLast24h, int newPlotsLast7d,
-                          List<TownStats> topTowns, List<TownStats> allTowns) {
+                          List<TownStats> topTowns, List<TownStats> allTowns, List<NationStats> nations) {
         this.generatedAtMillis = generatedAtMillis;
         this.totalTowns = totalTowns;
         this.totalTownBalance = totalTownBalance;
@@ -42,10 +60,11 @@ public class TownySnapshot {
         this.newPlotsLast7d = newPlotsLast7d;
         this.topTowns = topTowns;
         this.allTowns = allTowns;
+        this.nations = nations;
     }
 
     public static TownySnapshot empty() {
         return new TownySnapshot(System.currentTimeMillis(), 0, 0, 0, 0, 0, 0,
-                Collections.emptyList(), Collections.emptyList());
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
     }
 }

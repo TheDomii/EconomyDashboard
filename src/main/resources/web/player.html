@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spielerprofil - Server-Wirtschaft Dashboard</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="/">Übersicht</a>
+    <a href="/economy.html">Wirtschaft</a>
+    <a href="/traders.html">Händler</a>
+    <a href="/towny.html">Towny</a>
+    <a href="/quickshops.html">QuickShops</a>
+    <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <a href="/players.html">Spieler</a>
+    <a href="/archiv.html">Archiv</a>
+    <span class="spacer"></span>
+    <button id="reloadBtn" class="reload-btn" title="Jetzt aktualisieren"><span class="icon">↻</span> Aktualisieren</button>
+    <a href="/logout" class="logout">Abmelden</a>
+  </nav>
+
+  <h1 id="playerName">Spielerprofil</h1>
+  <div class="sub" id="updated">lade...</div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="balance">-</div>
+      <div class="stat-label">Guthaben</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="townyTown">-</div>
+      <div class="stat-label" id="townyLabel">Stadt (Towny)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="tradersNet">-</div>
+      <div class="stat-label">Netto bei Händlern (dtlTradersPlus)</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="quickshopNet">-</div>
+      <div class="stat-label">Netto bei QuickShops</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;" id="townyPanel">
+    <h3 style="margin-top:0;">Towny</h3>
+    <div id="townyBody" class="sub">lade...</div>
+  </div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <h3 style="margin-top:0;">Händler-Transaktionen (dtlTradersPlus)</h3>
+      <div class="sub" style="margin-bottom:8px;">Letzte 20 Transaktionen dieses Spielers.</div>
+      <table>
+        <thead><tr id="tradersTableHead"><th data-sort="timestamp">Zeit</th><th data-sort="type">Typ</th><th data-sort="shop">Shop</th><th data-sort="item">Item</th><th style="text-align:right;" data-sort="price">Preis</th></tr></thead>
+        <tbody id="tradersTable"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;">QuickShop-Transaktionen</h3>
+      <div class="sub" style="margin-bottom:8px;">Letzte 20 Transaktionen dieses Spielers als Käufer/Verkäufer.</div>
+      <table>
+        <thead><tr id="quickshopTableHead"><th data-sort="timestamp">Zeit</th><th data-sort="type">Typ</th><th data-sort="owner">Besitzer</th><th data-sort="item">Item</th><th style="text-align:right;" data-sort="price">Preis</th></tr></thead>
+        <tbody id="quickshopTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <h3 style="margin-top:0;">Eigene QuickShops</h3>
+      <table>
+        <thead><tr id="ownedShopsTableHead"><th data-sort="item">Item</th><th data-sort="shopBuys">Typ</th><th style="text-align:right;" data-sort="price">Preis</th></tr></thead>
+        <tbody id="ownedShopsTable"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;">Eigene Regionen (AdvancedRegionMarket)</h3>
+      <table>
+        <thead><tr id="ownedRegionsTableHead"><th data-sort="regionId">Region</th><th data-sort="world">Welt</th><th style="text-align:right;" data-sort="price">Preis</th></tr></thead>
+        <tbody id="ownedRegionsTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script src="/app.js"></script>
+<script>
+function playerNameFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('name') || '';
+}
+
+function renderRows(bodyId, rows, colCount, rowFn) {
+  const body = document.getElementById(bodyId);
+  body.innerHTML = '';
+  if (!rows || rows.length === 0) {
+    body.innerHTML = '<tr><td colspan="' + colCount + '" class="empty-hint">keine Daten</td></tr>';
+    return;
+  }
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = rowFn(r);
+    body.appendChild(tr);
+  });
+}
+
+let tradersRows = [];
+let quickshopRows = [];
+let ownedShopsRows = [];
+let ownedRegionsRows = [];
+
+const tradersRowFn = (t) =>
+  '<td>' + new Date(t.timestamp).toLocaleString('de-DE') + '</td><td>' + escapeHtml(t.type) + '</td><td>' + escapeHtml(t.shop) +
+  '</td><td>' + escapeHtml(t.item || '-') + '</td><td style="text-align:right;">' + formatMoney(t.price) + '</td>';
+const quickshopRowFn = (t) =>
+  '<td>' + new Date(t.timestamp).toLocaleString('de-DE') + '</td><td>' + escapeHtml(t.type) + '</td><td>' + escapeHtml(t.owner) +
+  '</td><td>' + escapeHtml(t.item || '-') + '</td><td style="text-align:right;">' + formatMoney(t.price) + '</td>';
+const ownedShopsRowFn = (s) =>
+  '<td>' + escapeHtml(s.item) + '</td><td>' + (s.shopBuys ? 'kauft an' : 'verkauft') + '</td><td style="text-align:right;">' + formatMoney(s.price) + '</td>';
+const ownedRegionsRowFn = (r) =>
+  '<td>' + escapeHtml(r.regionId) + '</td><td>' + escapeHtml(r.world) + '</td><td style="text-align:right;">' + formatMoney(r.price) + '</td>';
+
+const tradersSort = wireSortableTable(document.getElementById('tradersTableHead'),
+  () => renderRows('tradersTable', applySort(tradersRows, tradersSort), 5, tradersRowFn));
+const quickshopSort = wireSortableTable(document.getElementById('quickshopTableHead'),
+  () => renderRows('quickshopTable', applySort(quickshopRows, quickshopSort), 5, quickshopRowFn));
+const ownedShopsSort = wireSortableTable(document.getElementById('ownedShopsTableHead'),
+  () => renderRows('ownedShopsTable', applySort(ownedShopsRows, ownedShopsSort), 3, ownedShopsRowFn));
+const ownedRegionsSort = wireSortableTable(document.getElementById('ownedRegionsTableHead'),
+  () => renderRows('ownedRegionsTable', applySort(ownedRegionsRows, ownedRegionsSort), 3, ownedRegionsRowFn));
+
+async function loadProfile() {
+  const name = playerNameFromUrl();
+  if (!name) {
+    document.getElementById('updated').textContent = 'Kein Spielername angegeben (?name=...).';
+    return;
+  }
+  document.getElementById('playerName').textContent = name;
+
+  try {
+    const res = await fetch('/api/player?name=' + encodeURIComponent(name));
+    const data = await res.json();
+
+    document.getElementById('updated').textContent = 'Profil für ' + data.name;
+    document.getElementById('balance').textContent = data.balance !== null ? formatMoney(data.balance) : '-';
+
+    if (data.towny) {
+      document.getElementById('townyTown').textContent = data.towny.town || '-';
+      document.getElementById('townyBody').innerHTML =
+        '<div class="bar-row"><div style="flex:1;">Stadt</div><div>' + escapeHtml(data.towny.town || '-') + '</div></div>' +
+        '<div class="bar-row"><div style="flex:1;">Nation</div><div>' + escapeHtml(data.towny.nation || '-') + '</div></div>' +
+        '<div class="bar-row"><div style="flex:1;">Eigene Plots</div><div>' + formatNumber(data.towny.ownedPlots) + '</div></div>' +
+        '<div class="bar-row"><div style="flex:1;">Stadt beigetreten</div><div>' + (data.towny.joinedTownAt ? new Date(data.towny.joinedTownAt).toLocaleString('de-DE') : '-') + '</div></div>' +
+        '<div class="bar-row"><div style="flex:1;">Als Resident registriert</div><div>' + (data.towny.registered ? new Date(data.towny.registered).toLocaleString('de-DE') : '-') + '</div></div>';
+    } else {
+      document.getElementById('townyTown').textContent = '-';
+      document.getElementById('townyBody').innerHTML = '<div class="empty-hint">Kein Towny-Resident mit diesem Namen gefunden.</div>';
+    }
+
+    if (data.traders) {
+      const net = data.traders.summary.earned - data.traders.summary.spent;
+      document.getElementById('tradersNet').textContent = formatMoney(net);
+      tradersRows = data.traders.recent || [];
+      renderRows('tradersTable', applySort(tradersRows, tradersSort), 5, tradersRowFn);
+    } else {
+      document.getElementById('tradersNet').textContent = '-';
+    }
+
+    if (data.quickshop) {
+      const net = data.quickshop.summary.earned - data.quickshop.summary.spent;
+      document.getElementById('quickshopNet').textContent = formatMoney(net);
+      quickshopRows = data.quickshop.recent || [];
+      renderRows('quickshopTable', applySort(quickshopRows, quickshopSort), 5, quickshopRowFn);
+      ownedShopsRows = data.quickshop.summary.shopsOwned || [];
+      renderRows('ownedShopsTable', applySort(ownedShopsRows, ownedShopsSort), 3, ownedShopsRowFn);
+    } else {
+      document.getElementById('quickshopNet').textContent = '-';
+    }
+
+    if (data.regionmarket) {
+      ownedRegionsRows = data.regionmarket.summary.regionsOwned || [];
+      renderRows('ownedRegionsTable', applySort(ownedRegionsRows, ownedRegionsSort), 3, ownedRegionsRowFn);
+    }
+  } catch (e) {
+    document.getElementById('updated').textContent = 'Fehler beim Laden: ' + e;
+  }
+}
+
+wireReloadButton([loadProfile]);
+loadProfile();
+</script>
+</body>
+</html>

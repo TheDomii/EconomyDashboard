@@ -1,59 +1,70 @@
 package com.thedomibusiness.economydashboard.quickshop;
 
+import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.QuickShopAPI;
+import com.ghostchu.quickshop.api.database.DatabaseHelper;
+import com.ghostchu.quickshop.api.database.bean.DataRecord;
+import com.ghostchu.quickshop.api.database.bean.InfoRecord;
+import com.ghostchu.quickshop.api.database.bean.ShopRecord;
 import com.ghostchu.quickshop.api.obj.QUser;
-import com.ghostchu.quickshop.api.shop.Shop;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Polls QuickShop's own live shop registry (ShopManager#getAllShops()) - it tracks
- * every shop in a database, so this doesn't need to reconstruct anything from events.
+ * Reads QuickShop's shop registry straight from its own database (DatabaseHelper#listShops())
+ * instead of the live ShopManager#getAllShops() list. The live list only reflects shops whose
+ * chunk is currently loaded (ContainerShop#isLoaded()/isValid() both force a chunk load/generate
+ * if called on an unloaded one, which stalled the server on real-world data - see git history),
+ * so on a server where nobody has walked past most shops yet it returns close to nothing. The
+ * database join (DATA + SHOPS + SHOP_MAP tables) has no such requirement: it's a plain SQL read,
+ * the same one QuickShop's own /quickshop database commands use. Item names come back as a
+ * serialized ItemStack string, decoded via QuickShop.getInstance().platform().decodeStack() -
+ * no public API equivalent exists (the public API's own Util#deserialize uses the older
+ * YAML-based format and silently fails against modern component-based item data, verified
+ * empirically), hence the reach into QuickShop's internal (non-api) classes. Chunk-safe end to
+ * end. Runs on an async task (see EconomyDashboardPlugin) since it's a direct DB read, not a
+ * Bukkit API call.
  */
 public class QuickShopRegistryCollector {
 
-    @SuppressWarnings("unchecked")
     public List<QuickShopSnapshot.ShopListing> collect() {
         List<QuickShopSnapshot.ShopListing> result = new ArrayList<>();
-        List<Shop> shops = QuickShopAPI.getInstance().getShopManager().getAllShops();
-        for (Shop shop : shops) {
+        DatabaseHelper databaseHelper = QuickShopAPI.getInstance().getDatabaseHelper();
+        List<ShopRecord> records = databaseHelper.listShops(false);
+
+        for (ShopRecord record : records) {
             try {
-                // isValid() calls Location#getBlock() internally, which force-loads (and on
-                // an ungenerated world, force-generates) the shop's chunk - on the main thread
-                // that can stall the server when real shop data spans an unexplored world.
-                // isLoaded() is a plain cached flag QuickShop maintains via chunk load/unload
-                // events, so it never touches the chunk system: shops whose chunk isn't
-                // currently loaded are simply skipped for this poll instead of forcing a load.
-                if (!shop.isLoaded()) {
-                    continue;
-                }
-                QUser owner = shop.getOwner();
+                DataRecord data = record.getDataRecord();
+                InfoRecord info = record.getInfoRecord();
+
+                QUser owner = data.getOwner();
                 String ownerName = owner != null && owner.getUsername() != null ? owner.getUsername() : "?";
-                String itemName = shop.getItem() != null ? prettify(shop.getItem().getType().name()) : "?";
-                double price = shop.getPrice();
-                boolean shopBuys = shop.shopType() != null && shop.shopType().isBuying();
-                String location = locationKey(shop);
+                String itemName = itemName(data.getItem());
+                double price = data.getPrice();
+                // QuickShop's regular shop type: 0 = selling (shop sells to players), 1 = buying
+                // (shop buys from players) - the same convention ContainerShop's own type ID uses.
+                boolean shopBuys = data.getType() == 1;
+                String location = info.getWorld() + ":" + info.getX() + ":" + info.getY() + ":" + info.getZ();
 
                 result.add(new QuickShopSnapshot.ShopListing(ownerName, itemName, price, shopBuys, location));
             } catch (Exception ignored) {
-                // skip shops that fail to resolve (e.g. mid-unload) rather than aborting the whole poll
+                // skip records that fail to resolve (e.g. corrupt item data) rather than aborting the whole poll
             }
         }
         return result;
     }
 
-    private String locationKey(Shop shop) {
+    private String itemName(String serializedItem) {
+        if (serializedItem == null || serializedItem.isEmpty()) {
+            return "?";
+        }
         try {
-            // Shop#getShopBlock() calls Location#getBlock(), which force-loads (and on an
-            // ungenerated world, force-generates) the chunk if it isn't already loaded - on
-            // the main thread that can stall the server for real-world shop data spread across
-            // an unexplored world. bukkitLocation() returns the shop's cached Location field
-            // directly, no chunk access needed.
-            org.bukkit.Location loc = shop.bukkitLocation();
-            return loc.getWorld().getName() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
+            ItemStack item = QuickShop.getInstance().platform().decodeStack(serializedItem);
+            return item != null ? prettify(item.getType().name()) : "?";
         } catch (Exception e) {
-            return String.valueOf(System.identityHashCode(shop));
+            return "?";
         }
     }
 

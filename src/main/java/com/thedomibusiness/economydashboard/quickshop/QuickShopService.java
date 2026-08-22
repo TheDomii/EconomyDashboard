@@ -69,6 +69,42 @@ public class QuickShopService implements AutoCloseable {
         }
     }
 
+    public String queryTransactionsJson(TransactionFilter filter) {
+        try {
+            return db.queryTransactionsJson(filter);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "Gefilterte QuickShop-Transaktionen konnten nicht geladen werden", e);
+            return "[]";
+        }
+    }
+
+    public String playerSummaryJson(String playerName) {
+        try {
+            return db.playerSummaryJson(playerName);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "QuickShop-Spielerprofil konnte nicht geladen werden", e);
+            return "null";
+        }
+    }
+
+    public List<com.thedomibusiness.economydashboard.activity.ActivityEvent> recentActivity(int limit) {
+        try {
+            return db.recentActivity(limit);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "QuickShop-Aktivitaet konnte nicht geladen werden", e);
+            return Collections.emptyList();
+        }
+    }
+
+    public java.util.List<com.thedomibusiness.economydashboard.anomaly.SellVolumeRow> sellVolumeByItemAndPlayer() {
+        try {
+            return db.sellVolumeByItemAndPlayer();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "Verkaufsvolumen fuer Anomalie-Erkennung konnte nicht geladen werden", e);
+            return java.util.Collections.emptyList();
+        }
+    }
+
     @Override
     public void close() {
         db.close();

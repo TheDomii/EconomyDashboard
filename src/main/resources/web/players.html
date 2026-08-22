@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spieler - Server-Wirtschaft Dashboard</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="/">Übersicht</a>
+    <a href="/economy.html">Wirtschaft</a>
+    <a href="/traders.html">Händler</a>
+    <a href="/towny.html">Towny</a>
+    <a href="/quickshops.html">QuickShops</a>
+    <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <a href="/players.html" class="active">Spieler</a>
+    <a href="/archiv.html">Archiv</a>
+    <span class="spacer"></span>
+    <button id="reloadBtn" class="reload-btn" title="Jetzt aktualisieren"><span class="icon">↻</span> Aktualisieren</button>
+    <a href="/logout" class="logout">Abmelden</a>
+  </nav>
+
+  <h1>Spieler</h1>
+  <div class="sub" id="updated">lade...</div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="stat-value" id="currentOnline">-</div>
+      <div class="stat-label">Aktuell online</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="todayUnique">-</div>
+      <div class="stat-label">Eindeutige Spieler heute</div>
+    </div>
+    <div class="panel">
+      <div class="stat-value" id="peakOnline">-</div>
+      <div class="stat-label" id="peakOnlineLabel">Rekord gleichzeitig online</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h3 style="margin-top:0;">Eindeutige Spieler pro Tag</h3>
+    <div class="sub" style="margin-bottom:8px;">Trend der letzten 30 Tage - wie viele verschiedene Spieler pro Tag mindestens einmal auf dem Server waren. Gestrichelte Linie = Durchschnitt, Punkt = bester Tag.</div>
+    <div id="dailyChart"></div>
+    <div class="trend-stats" id="dailyStats"></div>
+    <div style="margin-top:12px;"><button class="reload-btn" onclick="window.location.href='/api/players/activity/export.csv'">CSV herunterladen</button></div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h3 style="margin-top:0;">Wann ist am meisten los?</h3>
+    <div class="sub" style="margin-bottom:8px;">Durchschnittliche Online-Spieleranzahl je Uhrzeit, über alle aufgezeichneten Tage gemittelt.</div>
+    <div id="hourlyChart"></div>
+    <div class="trend-stats" id="hourlyStats"></div>
+  </div>
+
+<script src="/app.js"></script>
+<script>
+function average(values) {
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+}
+
+function renderDailySection(dailyCounts) {
+  const chartEl = document.getElementById('dailyChart');
+  const statsEl = document.getElementById('dailyStats');
+  statsEl.innerHTML = '';
+  if (!dailyCounts || dailyCounts.length === 0) {
+    renderTrendChart(chartEl, []);
+    return;
+  }
+
+  // API returns newest-first; the chart wants chronological (oldest-first) order.
+  const chron = dailyCounts.slice().reverse();
+  const values = chron.map((d) => d.uniquePlayers);
+  renderTrendChart(chartEl, chron.map((d) => ({ label: d.day.slice(5), value: d.uniquePlayers })));
+
+  const avg = average(values);
+  let best = chron[0];
+  let worst = chron[0];
+  chron.forEach((d) => {
+    if (d.uniquePlayers > best.uniquePlayers) best = d;
+    if (d.uniquePlayers < worst.uniquePlayers) worst = d;
+  });
+
+  let trendHtml = '<div class="trend-stat"><div class="trend-stat-value">–</div><div class="trend-stat-label">Trend (braucht mehr Tage)</div></div>';
+  if (chron.length >= 4) {
+    const half = Math.floor(chron.length / 2);
+    const olderAvg = average(values.slice(0, half));
+    const recentAvg = average(values.slice(values.length - half));
+    if (olderAvg > 0) {
+      const pct = ((recentAvg - olderAvg) / olderAvg) * 100;
+      const cls = pct > 1 ? 'up' : pct < -1 ? 'down' : '';
+      const arrow = pct > 1 ? '▲' : pct < -1 ? '▼' : '▬';
+      trendHtml = '<div class="trend-stat"><div class="trend-stat-value ' + cls + '">' + arrow + ' ' + (pct >= 0 ? '+' : '') + pct.toFixed(0) + '%</div>' +
+        '<div class="trend-stat-label">Trend (2. Hälfte vs. 1. Hälfte)</div></div>';
+    }
+  }
+
+  statsEl.innerHTML =
+    '<div class="trend-stat"><div class="trend-stat-value">' + avg.toFixed(1) + '</div><div class="trend-stat-label">Ø Spieler/Tag</div></div>' +
+    trendHtml +
+    '<div class="trend-stat"><div class="trend-stat-value">' + best.uniquePlayers + '</div><div class="trend-stat-label">Bester Tag (' + best.day + ')</div></div>' +
+    '<div class="trend-stat"><div class="trend-stat-value">' + worst.uniquePlayers + '</div><div class="trend-stat-label">Ruhigster Tag (' + worst.day + ')</div></div>';
+}
+
+function renderHourlySection(hourlyPattern) {
+  const chartEl = document.getElementById('hourlyChart');
+  const statsEl = document.getElementById('hourlyStats');
+  statsEl.innerHTML = '';
+  if (!hourlyPattern || hourlyPattern.length === 0) {
+    renderTrendChart(chartEl, []);
+    return;
+  }
+
+  const byHour = {};
+  hourlyPattern.forEach((h) => { byHour[h.hour] = h.avgOnline; });
+  const full = [];
+  for (let hour = 0; hour < 24; hour++) {
+    full.push({ hour, avgOnline: byHour[hour] || 0 });
+  }
+  renderTrendChart(chartEl, full.map((h) => ({ label: String(h.hour).padStart(2, '0') + ':00', value: h.avgOnline })));
+
+  let peak = full[0];
+  let quiet = full[0];
+  full.forEach((h) => {
+    if (h.avgOnline > peak.avgOnline) peak = h;
+    if (h.avgOnline < quiet.avgOnline) quiet = h;
+  });
+
+  statsEl.innerHTML =
+    '<div class="trend-stat"><div class="trend-stat-value">' + String(peak.hour).padStart(2, '0') + ':00</div><div class="trend-stat-label">Stoßzeit (Ø ' + peak.avgOnline.toFixed(1) + ' Spieler)</div></div>' +
+    '<div class="trend-stat"><div class="trend-stat-value">' + String(quiet.hour).padStart(2, '0') + ':00</div><div class="trend-stat-label">Ruhigste Zeit (Ø ' + quiet.avgOnline.toFixed(1) + ' Spieler)</div></div>' +
+    '<div class="trend-stat"><div class="trend-stat-value">' + average(full.map((h) => h.avgOnline)).toFixed(1) + '</div><div class="trend-stat-label">Ø über den ganzen Tag</div></div>';
+}
+
+async function refreshPlayers() {
+  try {
+    const res = await fetch('/api/players/activity');
+    const data = await res.json();
+
+    document.getElementById('updated').textContent = 'Stand: ' + new Date(data.generatedAtMillis).toLocaleString('de-DE');
+    document.getElementById('currentOnline').textContent = formatNumber(data.currentOnline);
+    document.getElementById('todayUnique').textContent =
+      data.dailyCounts && data.dailyCounts.length > 0 ? formatNumber(data.dailyCounts[0].uniquePlayers) : '0';
+    document.getElementById('peakOnline').textContent = formatNumber(data.peakOnline);
+    document.getElementById('peakOnlineLabel').textContent =
+      data.peakOnlineAtMillis ? 'Rekord gleichzeitig online (' + new Date(data.peakOnlineAtMillis).toLocaleString('de-DE') + ')' : 'Rekord gleichzeitig online';
+
+    renderDailySection(data.dailyCounts);
+    renderHourlySection(data.hourlyPattern);
+  } catch (e) {
+    document.getElementById('updated').textContent = 'Fehler beim Laden: ' + e;
+  }
+}
+
+wireReloadButton([refreshPlayers]);
+refreshPlayers();
+setInterval(refreshPlayers, 30000);
+</script>
+</body>
+</html>

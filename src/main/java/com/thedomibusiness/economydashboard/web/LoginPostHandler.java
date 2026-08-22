@@ -3,12 +3,14 @@ package com.thedomibusiness.economydashboard.web;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.thedomibusiness.economydashboard.auth.LoginConfig;
+import com.thedomibusiness.economydashboard.auth.LoginRateLimiter;
 import com.thedomibusiness.economydashboard.auth.SessionManager;
 import org.bukkit.plugin.Plugin;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -20,11 +22,13 @@ public class LoginPostHandler implements HttpHandler {
     private final Plugin plugin;
     private final LoginConfig config;
     private final SessionManager sessionManager;
+    private final LoginRateLimiter rateLimiter;
 
-    public LoginPostHandler(Plugin plugin, LoginConfig config, SessionManager sessionManager) {
+    public LoginPostHandler(Plugin plugin, LoginConfig config, SessionManager sessionManager, LoginRateLimiter rateLimiter) {
         this.plugin = plugin;
         this.config = config;
         this.sessionManager = sessionManager;
+        this.rateLimiter = rateLimiter;
     }
 
     @Override
@@ -48,9 +52,20 @@ public class LoginPostHandler implements HttpHandler {
         Map<String, String> form = parseForm(body);
         String username = form.getOrDefault("username", "");
         String password = form.getOrDefault("password", "");
-        String remote = exchange.getRemoteAddress() != null ? exchange.getRemoteAddress().toString() : "unbekannt";
+        InetSocketAddress remoteAddr = exchange.getRemoteAddress();
+        String remote = remoteAddr != null ? remoteAddr.toString() : "unbekannt";
+        String ip = remoteAddr != null && remoteAddr.getAddress() != null
+                ? remoteAddr.getAddress().getHostAddress() : "unbekannt";
+
+        if (rateLimiter.isLocked(ip)) {
+            plugin.getLogger().log(Level.WARNING, "Dashboard-Login blockiert (zu viele Fehlversuche): " + remote);
+            exchange.getResponseHeaders().set("Location", "/login?error=locked");
+            exchange.sendResponseHeaders(302, -1);
+            return;
+        }
 
         if (username.equals(config.username) && password.equals(config.password)) {
+            rateLimiter.recordSuccess(ip);
             String token = sessionManager.createSession();
             plugin.getLogger().info("Dashboard-Login erfolgreich: " + username + " von " + remote);
 
@@ -59,6 +74,7 @@ public class LoginPostHandler implements HttpHandler {
             exchange.getResponseHeaders().set("Location", "/");
             exchange.sendResponseHeaders(302, -1);
         } else {
+            rateLimiter.recordFailure(ip);
             plugin.getLogger().log(Level.WARNING, "Fehlgeschlagener Dashboard-Login: Benutzername '" + username + "' von " + remote);
             exchange.getResponseHeaders().set("Location", "/login?error=1");
             exchange.sendResponseHeaders(302, -1);

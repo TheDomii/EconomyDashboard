@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QuickShops - Server-Wirtschaft Dashboard</title>
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -13,44 +14,15 @@
     <a href="/towny.html">Towny</a>
     <a href="/quickshops.html" class="active">QuickShops</a>
     <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <a href="/players.html">Spieler</a>
+    <a href="/archiv.html">Archiv</a>
     <span class="spacer"></span>
+    <button id="reloadBtn" class="reload-btn" title="Jetzt aktualisieren"><span class="icon">↻</span> Aktualisieren</button>
     <a href="/logout" class="logout">Abmelden</a>
   </nav>
 
   <h1>QuickShops</h1>
-  <div class="sub" id="updated">Registry wird direkt aus QuickShops eigener Shop-Liste gelesen (live, nicht nur aus Events) - nur Shops in aktuell geladenen Chunks werden erfasst.</div>
-
-  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
-  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
-
-  <div class="panel" style="margin-bottom:16px;">
-    <h3 style="margin-top:0;">Shop-Registry filtern / als CSV exportieren</h3>
-    <div class="export-panel" id="export-quickshops" style="border-top:none; margin-top:0; padding-top:0;">
-      <input type="text" placeholder="Besitzer enthält..." data-param="owner">
-      <input type="text" placeholder="Item enthält..." data-param="item">
-      <button onclick="exportCsv('export-quickshops', '/api/quickshops/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
-
-  <div class="panel" style="margin-bottom:16px;">
-    <h3 style="margin-top:0;">Transaktionshistorie filtern / als CSV exportieren</h3>
-    <div class="sub" style="margin-bottom:8px;">Einzelne Transaktionen (nicht aggregiert), gefiltert als CSV.</div>
-    <div class="export-panel" id="export-quickshop-tx" style="border-top:none; margin-top:0; padding-top:0;">
-      <input type="date" data-param="from" title="Von">
-      <input type="date" data-param="to" title="Bis">
-      <select data-param="type">
-        <option value="">Alle Typen</option>
-        <option value="BUY">Kauf</option>
-        <option value="SELL">Verkauf</option>
-      </select>
-      <input type="text" placeholder="Spieler" data-param="player">
-      <input type="text" placeholder="Besitzer" data-param="owner">
-      <input type="text" placeholder="Item" data-param="item">
-      <input type="number" placeholder="Min. Preis" data-param="minPrice">
-      <input type="number" placeholder="Max. Preis" data-param="maxPrice">
-      <button onclick="exportCsv('export-quickshop-tx', '/api/quickshops/transactions/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
+  <div class="sub" id="updated">Registry wird direkt aus QuickShops eigener Datenbank gelesen (nicht aus dem Live-Chunk-Zustand) - jeder Shop wird unabhängig davon erfasst, ob sein Chunk gerade geladen ist.</div>
 
   <div class="grid">
     <div class="panel">
@@ -84,8 +56,11 @@
           </select>
         </div>
       </div>
+      <div class="filter-row" id="filter-owners">
+        <input type="text" placeholder="Spieler enthält..." data-param="name">
+      </div>
       <table>
-        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Shops</th><th style="text-align:right;">Tx</th><th style="text-align:right;">Netto</th></tr></thead>
+        <thead><tr id="qsOwnerTableHead"><th>#</th><th data-sort="owner">Spieler</th><th style="text-align:right;" data-sort="shopCount">Shops</th><th style="text-align:right;" data-sort="transactions">Tx</th><th style="text-align:right;" data-sort="net">Netto</th></tr></thead>
         <tbody id="qsOwnerTable"></tbody>
       </table>
       <div class="sub count-hint" id="ownerCountHint"></div>
@@ -103,46 +78,120 @@
           </select>
         </div>
       </div>
+      <div class="filter-row" id="filter-shops">
+        <input type="text" placeholder="Besitzer enthält..." data-param="owner">
+        <input type="text" placeholder="Item enthält..." data-param="item">
+        <button onclick="exportCsv('filter-shops', '/api/quickshops/export.csv')">CSV herunterladen</button>
+      </div>
       <table>
-        <thead><tr><th>Besitzer</th><th>Item</th><th>Typ</th><th style="text-align:right;">Preis</th></tr></thead>
+        <thead><tr id="shopTableHead"><th data-sort="owner">Besitzer</th><th data-sort="item">Item</th><th data-sort="shopBuys">Typ</th><th style="text-align:right;" data-sort="price">Preis</th></tr></thead>
         <tbody id="qsShopTable"></tbody>
       </table>
       <div class="sub count-hint" id="shopCountHint"></div>
     </div>
   </div>
 
+  <div class="panel" style="margin-top:16px;">
+    <h3 style="margin-top:0;">Transaktionshistorie</h3>
+    <div class="sub" style="margin-bottom:8px;">Einzelne Transaktionen (nicht aggregiert). Die Tabelle zeigt eine Live-Vorschau (max. 250 Zeilen) - für den vollständigen, gefilterten Datensatz die CSV verwenden.</div>
+    <div class="filter-row" id="filter-tx">
+      <input type="date" data-param="from" title="Von">
+      <input type="date" data-param="to" title="Bis">
+      <select data-param="type">
+        <option value="">Alle Typen</option>
+        <option value="BUY">Kauf</option>
+        <option value="SELL">Verkauf</option>
+      </select>
+      <input type="text" placeholder="Spieler" data-param="player">
+      <input type="text" placeholder="Besitzer" data-param="owner">
+      <input type="text" placeholder="Item" data-param="item">
+      <input type="number" placeholder="Min. Preis" data-param="minPrice">
+      <input type="number" placeholder="Max. Preis" data-param="maxPrice">
+      <button onclick="exportCsv('filter-tx', '/api/quickshops/transactions/export.csv')">CSV herunterladen</button>
+    </div>
+    <table>
+      <thead><tr id="txTableHead"><th data-sort="timestamp">Zeit</th><th data-sort="type">Typ</th><th data-sort="player">Spieler</th><th data-sort="owner">Besitzer</th><th data-sort="item">Item</th><th style="text-align:right;" data-sort="amount">Menge</th><th style="text-align:right;" data-sort="price">Preis</th></tr></thead>
+      <tbody id="txTable"></tbody>
+    </table>
+    <div class="sub count-hint" id="txCountHint"></div>
+  </div>
+
 <script src="/app.js"></script>
 <script>
 let topOwners = [];
+let filteredOwners = [];
 let shops = [];
+let filteredShops = [];
 
 function renderOwners() {
   const size = pageSizeValue(document.getElementById('ownerPageSize'));
-  const shown = sliceForDisplay(topOwners, size);
+  const shown = sliceForDisplay(applySort(filteredOwners, ownerSort), size);
   const ownerBody = document.getElementById('qsOwnerTable');
   ownerBody.innerHTML = '';
+  if (shown.length === 0) ownerBody.innerHTML = '<tr><td colspan="5" class="empty-hint">keine Treffer</td></tr>';
   shown.forEach((o, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + o.owner + '</td><td style="text-align:right;">' + formatNumber(o.shopCount) +
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + playerLink(o.owner) + '</td><td style="text-align:right;">' + formatNumber(o.shopCount) +
       '</td><td style="text-align:right;">' + formatNumber(o.transactions) + '</td><td style="text-align:right;">' + formatMoney(o.net) + '</td>';
     ownerBody.appendChild(tr);
   });
-  document.getElementById('ownerCountHint').textContent = shown.length + ' von ' + topOwners.length + ' Spielern angezeigt.';
+  document.getElementById('ownerCountHint').textContent = shown.length + ' von ' + filteredOwners.length + ' gefiltert (' + topOwners.length + ' insgesamt).';
 }
 
 function renderShops() {
   const size = pageSizeValue(document.getElementById('shopPageSize'));
-  const shown = sliceForDisplay(shops, size);
+  const shown = sliceForDisplay(applySort(filteredShops, shopSort), size);
   const shopBody = document.getElementById('qsShopTable');
   shopBody.innerHTML = '';
+  if (shown.length === 0) shopBody.innerHTML = '<tr><td colspan="4" class="empty-hint">keine Treffer</td></tr>';
   shown.forEach((s) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + s.owner + '</td><td>' + s.item + '</td><td>' + (s.shopBuys ? 'kauft an' : 'verkauft') +
+    tr.innerHTML = '<td>' + playerLink(s.owner) + '</td><td>' + escapeHtml(s.item) + '</td><td>' + (s.shopBuys ? 'kauft an' : 'verkauft') +
       '</td><td style="text-align:right;">' + formatPrice(s.price) + '</td>';
     shopBody.appendChild(tr);
   });
-  document.getElementById('shopCountHint').textContent = shown.length + ' von ' + shops.length + ' Shops angezeigt.';
+  document.getElementById('shopCountHint').textContent = shown.length + ' von ' + filteredShops.length + ' gefiltert (' + shops.length + ' insgesamt).';
 }
+
+let lastTxRows = [];
+
+function renderTx(rows) {
+  if (rows !== lastTxRows) lastTxRows = rows;
+  rows = applySort(lastTxRows, txSort);
+  const body = document.getElementById('txTable');
+  body.innerHTML = '';
+  if (rows.length === 0) body.innerHTML = '<tr><td colspan="7" class="empty-hint">keine Treffer</td></tr>';
+  rows.forEach((t) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + new Date(t.timestamp).toLocaleString('de-DE') + '</td><td>' + escapeHtml(t.type) + '</td><td>' + playerLink(t.player) +
+      '</td><td>' + playerLink(t.owner) + '</td><td>' + escapeHtml(t.item || '-') +
+      '</td><td style="text-align:right;">' + formatNumber(t.amount) +
+      '</td><td style="text-align:right;">' + formatMoney(t.price) + '</td>';
+    body.appendChild(tr);
+  });
+  document.getElementById('txCountHint').textContent = rows.length + ' Zeilen angezeigt (Live-Vorschau, max. 250).';
+}
+
+const ownerSort = wireSortableTable(document.getElementById('qsOwnerTableHead'), renderOwners);
+const shopSort = wireSortableTable(document.getElementById('shopTableHead'), renderShops);
+const txSort = wireSortableTable(document.getElementById('txTableHead'), () => renderTx(lastTxRows));
+
+const reapplyOwnerFilter = initClientFilterTable('filter-owners', (v) =>
+  topOwners.filter((o) => !v.name || o.owner.toLowerCase().includes(v.name.toLowerCase())), (filtered) => {
+  filteredOwners = filtered;
+  renderOwners();
+});
+
+const reapplyShopFilter = initClientFilterTable('filter-shops', (v) =>
+  shops.filter((s) =>
+    (!v.owner || s.owner.toLowerCase().includes(v.owner.toLowerCase())) &&
+    (!v.item || s.item.toLowerCase().includes(v.item.toLowerCase()))
+  ), (filtered) => {
+  filteredShops = filtered;
+  renderShops();
+});
+
+initServerFilterTable('filter-tx', '/api/quickshops/transactions', renderTx);
 
 async function refreshQuickShops() {
   try {
@@ -151,7 +200,7 @@ async function refreshQuickShops() {
 
     document.getElementById('updated').textContent =
       'Stand: ' + new Date(data.generatedAtMillis).toLocaleString('de-DE') +
-      ' - Registry wird direkt aus QuickShops eigener Shop-Liste gelesen (live, nicht nur aus Events) - nur Shops in aktuell geladenen Chunks werden erfasst.';
+      ' - Registry wird direkt aus QuickShops eigener Datenbank gelesen (nicht aus dem Live-Chunk-Zustand).';
     document.getElementById('qsShopCount').textContent = formatNumber(data.totalShops);
     document.getElementById('qsTxCount').textContent = formatNumber(data.totalTransactions);
     document.getElementById('qsRevenue').textContent = formatMoney(data.totalRevenue);
@@ -159,13 +208,14 @@ async function refreshQuickShops() {
 
     topOwners = data.topOwners;
     shops = data.shops;
-    renderOwners();
-    renderShops();
+    reapplyOwnerFilter();
+    reapplyShopFilter();
   } catch (e) {
     console.error('Fehler beim Laden der QuickShop-Daten: ' + e);
   }
 }
 
+wireReloadButton([refreshQuickShops]);
 refreshQuickShops();
 setInterval(refreshQuickShops, 30000);
 </script>

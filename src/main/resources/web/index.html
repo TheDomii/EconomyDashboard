@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Server-Wirtschaft Dashboard</title>
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -13,15 +14,27 @@
     <a href="/towny.html">Towny</a>
     <a href="/quickshops.html">QuickShops</a>
     <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <a href="/players.html">Spieler</a>
+    <a href="/archiv.html">Archiv</a>
     <span class="spacer"></span>
+    <button id="reloadBtn" class="reload-btn" title="Jetzt aktualisieren"><span class="icon">↻</span> Aktualisieren</button>
     <a href="/logout" class="logout">Abmelden</a>
   </nav>
 
   <h1>Server-Wirtschaft Dashboard</h1>
   <div class="sub" id="updated">lade...</div>
 
-  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
-  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
+  <div class="panel" id="anomalyPanel" style="margin-bottom:16px;">
+    <div class="table-toolbar">
+      <h3 style="margin:0;">Handlungsbedarf</h3>
+      <a href="/archiv.html" class="sub" style="text-decoration:none;">Archiv ansehen &rarr;</a>
+    </div>
+    <div class="sub" style="margin-bottom:8px;">Automatisch erkannte Auffälligkeiten - statistische Ausreißer gegen die eigenen Serverdaten, keine festen Schwellenwerte. Läuft alle paar Minuten im Hintergrund. Geprüfte Einträge lassen sich mit "Geprüft" ins Archiv verschieben.</div>
+    <div id="anomalyList" class="anomaly-list">
+      <div class="empty-hint">lade...</div>
+    </div>
+    <button id="anomalyToggle" class="reload-btn" style="margin-top:10px;display:none;"></button>
+  </div>
 
   <div class="landing-links">
     <a class="panel" href="/economy.html">
@@ -44,6 +57,32 @@
       <div class="stat-value" id="lnkRegionMarket">-</div>
       <div class="stat-label">Regionen &middot; AdvancedRegionMarket &rarr;</div>
     </a>
+    <a class="panel" href="/players.html">
+      <div class="stat-value" id="lnkPlayersOnline">-</div>
+      <div class="stat-label">Aktuell online &middot; Spieler &rarr;</div>
+    </a>
+  </div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel">
+      <h3 style="margin-top:0;">Live-Aktivität</h3>
+      <div class="sub" style="margin-bottom:8px;">Neueste Transaktionen über alle Module hinweg, aktuellste zuerst.</div>
+      <div id="activityList" class="activity-list">
+        <div class="empty-hint">lade...</div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;">Wohin fließt das Geld?</h3>
+      <div class="sub" style="margin-bottom:8px;">Größenvergleich der Geld-Pools und die einzelnen Shops/Spieler mit der größten Bewegung, basierend auf den aktuellen Daten.</div>
+      <div class="flow-section">
+        <h4>Geld-Pools im Vergleich</h4>
+        <div id="flowPools"><div class="empty-hint">lade...</div></div>
+      </div>
+      <div class="flow-section">
+        <h4>Größte Einzelbewegungen</h4>
+        <div id="flowTop"><div class="empty-hint">lade...</div></div>
+      </div>
+    </div>
   </div>
 
 <script src="/app.js"></script>
@@ -65,13 +104,178 @@ async function refreshOverview() {
     document.getElementById('lnkTowny').textContent = formatNumber(towny.totalTowns);
     document.getElementById('lnkQuickShops').textContent = formatNumber(quickshops.totalShops);
     document.getElementById('lnkRegionMarket').textContent = formatNumber(regionmarket.totalRegions);
+
+    renderFlowPools(economy, traders, towny, quickshops, regionmarket);
+    renderFlowTop(traders, quickshops);
   } catch (e) {
     document.getElementById('updated').textContent = 'Fehler beim Laden: ' + e;
   }
 }
 
+async function refreshActivity() {
+  try {
+    const res = await fetch('/api/activity?limit=25');
+    const data = await res.json();
+    const list = document.getElementById('activityList');
+    list.innerHTML = '';
+
+    if (!data || data.length === 0) {
+      list.innerHTML = '<div class="empty-hint">Noch keine Aktivität aufgezeichnet.</div>';
+      return;
+    }
+
+    data.forEach((e) => {
+      const row = document.createElement('div');
+      row.className = 'activity-row';
+      row.innerHTML =
+        '<div class="activity-time" title="' + new Date(e.timestamp).toLocaleString('de-DE') + '">' + relativeTime(e.timestamp) + '</div>' +
+        '<div class="activity-source">' + escapeHtml(e.source) + '</div>' +
+        '<div class="activity-desc">' + escapeHtml(e.description) + '</div>';
+      list.appendChild(row);
+    });
+  } catch (e) {
+    document.getElementById('activityList').innerHTML = '<div class="empty-hint">Fehler beim Laden: ' + e + '</div>';
+  }
+}
+
+async function refreshPlayersOnline() {
+  try {
+    const res = await fetch('/api/players/activity');
+    const data = await res.json();
+    document.getElementById('lnkPlayersOnline').textContent = formatNumber(data.currentOnline);
+  } catch (e) {
+    console.error('Fehler beim Laden der Spieleranzahl: ' + e);
+  }
+}
+
+function renderFlowPools(economy, traders, towny, quickshops, regionmarket) {
+  const pools = [
+    { label: 'Spielerguthaben (Wirtschaft)', value: economy.totalMoney },
+    { label: 'Stadtkassen (Towny)', value: towny.totalTownBalance },
+    { label: 'Händler-Umsatz (dtlTradersPlus)', value: traders.totalRevenue + traders.totalPayouts },
+    { label: 'QuickShop-Umsatz', value: quickshops.totalRevenue + quickshops.totalPayouts },
+    { label: 'AdvancedRegionMarket-Umsatz', value: regionmarket.totalSalesVolume }
+  ].sort((a, b) => b.value - a.value);
+  const max = Math.max(1, ...pools.map((p) => p.value));
+  const el = document.getElementById('flowPools');
+  el.innerHTML = '';
+  pools.forEach((p) => {
+    const row = document.createElement('div');
+    row.className = 'flow-bar-row';
+    row.innerHTML =
+      '<div class="flow-bar-label">' + p.label + '</div>' +
+      '<div class="flow-bar-track"><div class="flow-bar-fill" style="width:' + (p.value / max * 100) + '%"></div></div>' +
+      '<div class="flow-bar-value">' + formatMoney(p.value) + '</div>';
+    el.appendChild(row);
+  });
+}
+
+function renderFlowTop(traders, quickshops) {
+  const movements = [];
+  (traders.topShops || []).forEach((s) => movements.push({ label: s.name, source: 'Händler', value: s.revenue + s.payouts }));
+  (quickshops.topOwners || []).forEach((o) => movements.push({ label: o.owner, source: 'QuickShop', value: o.revenue + o.payouts }));
+  movements.sort((a, b) => b.value - a.value);
+  const top = movements.slice(0, 8);
+
+  const el = document.getElementById('flowTop');
+  el.innerHTML = '';
+  if (top.length === 0) {
+    el.innerHTML = '<div class="empty-hint">Noch keine Daten.</div>';
+    return;
+  }
+  const max = Math.max(1, ...top.map((m) => m.value));
+  top.forEach((m) => {
+    const row = document.createElement('div');
+    row.className = 'flow-bar-row';
+    row.innerHTML =
+      '<div class="flow-bar-label">' + escapeHtml(m.label) + ' <span class="flow-bar-source">(' + m.source + ')</span></div>' +
+      '<div class="flow-bar-track"><div class="flow-bar-fill" style="width:' + (m.value / max * 100) + '%"></div></div>' +
+      '<div class="flow-bar-value">' + formatMoney(m.value) + '</div>';
+    el.appendChild(row);
+  });
+}
+
+let allAnomalies = [];
+let anomaliesExpanded = false;
+
+async function refreshAnomalies() {
+  try {
+    const res = await fetch('/api/anomalies');
+    const data = await res.json();
+    allAnomalies = data.anomalies || [];
+    renderAnomalies();
+  } catch (e) {
+    document.getElementById('anomalyList').innerHTML = '<div class="empty-hint">Fehler beim Laden: ' + e + '</div>';
+  }
+}
+
+function buildAnomalyCard(a) {
+  const card = document.createElement('div');
+  card.className = 'anomaly-card ' + a.severity.toLowerCase();
+  card.innerHTML =
+    '<div class="anomaly-badge">' + (a.severity === 'HIGH' ? 'Hoch' : 'Mittel') + '</div>' +
+    '<div class="anomaly-body">' +
+    '<div class="anomaly-title">' + escapeHtml(a.title) + '</div>' +
+    '<div class="anomaly-desc">' + escapeHtml(a.description) + (a.linkUrl ? '<a href="' + escapeHtml(a.linkUrl) + '">Ansehen &rarr;</a>' : '') + '</div>' +
+    '</div>' +
+    '<button class="anomaly-approve-btn" title="Als geprüft markieren - verschwindet hier, landet im Archiv">&#10003; Geprüft</button>';
+
+  card.querySelector('.anomaly-approve-btn').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    try {
+      const params = new URLSearchParams({
+        key: a.key, severity: a.severity, category: a.category,
+        title: a.title, description: a.description, linkUrl: a.linkUrl || ''
+      });
+      await fetch('/api/anomalies/approve?' + params.toString(), { method: 'POST' });
+      allAnomalies = allAnomalies.filter((x) => x.key !== a.key);
+      renderAnomalies();
+    } catch (e) {
+      console.error('Fehler beim Markieren als geprueft: ' + e);
+      btn.disabled = false;
+    }
+  });
+
+  return card;
+}
+
+function renderAnomalies() {
+  const list = document.getElementById('anomalyList');
+  const toggleBtn = document.getElementById('anomalyToggle');
+  list.innerHTML = '';
+
+  if (allAnomalies.length === 0) {
+    list.innerHTML = '<div class="anomaly-clear">✓ Keine Auffälligkeiten erkannt - alles im normalen Bereich.</div>';
+    toggleBtn.style.display = 'none';
+    return;
+  }
+
+  const shown = anomaliesExpanded ? allAnomalies : allAnomalies.slice(0, 1);
+  shown.forEach((a) => list.appendChild(buildAnomalyCard(a)));
+
+  if (allAnomalies.length > 1) {
+    toggleBtn.style.display = '';
+    toggleBtn.textContent = anomaliesExpanded ? '▲ Weniger anzeigen' : '▼ Alle ' + allAnomalies.length + ' anzeigen';
+  } else {
+    toggleBtn.style.display = 'none';
+  }
+}
+
+document.getElementById('anomalyToggle').addEventListener('click', () => {
+  anomaliesExpanded = !anomaliesExpanded;
+  renderAnomalies();
+});
+
+wireReloadButton([refreshOverview, refreshAnomalies, refreshActivity, refreshPlayersOnline]);
 refreshOverview();
+refreshAnomalies();
+refreshActivity();
+refreshPlayersOnline();
 setInterval(refreshOverview, 30000);
+setInterval(refreshAnomalies, 60000);
+setInterval(refreshActivity, 15000);
+setInterval(refreshPlayersOnline, 30000);
 </script>
 </body>
 </html>

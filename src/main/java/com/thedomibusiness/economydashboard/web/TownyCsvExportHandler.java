@@ -21,6 +21,7 @@ public class TownyCsvExportHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         Map<String, String> query = HttpUtil.parseQuery(exchange.getRequestURI().getRawQuery());
         String nameFilter = query.getOrDefault("name", "").toLowerCase(Locale.ROOT);
+        String nationFilter = query.getOrDefault("nation", "").toLowerCase(Locale.ROOT);
         Double minBalance = parseDouble(query.get("minBalance"));
 
         TownySnapshot snapshot = snapshotSupplier.get();
@@ -28,6 +29,9 @@ public class TownyCsvExportHandler implements HttpHandler {
         csv.header("town", "nation", "balance", "plots");
         for (TownySnapshot.TownStats t : snapshot.allTowns) {
             if (!nameFilter.isEmpty() && !t.name.toLowerCase(Locale.ROOT).contains(nameFilter)) {
+                continue;
+            }
+            if (!nationFilter.isEmpty() && !(t.nation != null ? t.nation.toLowerCase(Locale.ROOT) : "").contains(nationFilter)) {
                 continue;
             }
             if (minBalance != null && t.balance < minBalance) {

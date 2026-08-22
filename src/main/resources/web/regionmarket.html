@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AdvancedRegionMarket - Server-Wirtschaft Dashboard</title>
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -13,48 +14,15 @@
     <a href="/towny.html">Towny</a>
     <a href="/quickshops.html">QuickShops</a>
     <a href="/regionmarket.html" class="active">AdvancedRegionMarket</a>
+    <a href="/players.html">Spieler</a>
+    <a href="/archiv.html">Archiv</a>
     <span class="spacer"></span>
+    <button id="reloadBtn" class="reload-btn" title="Jetzt aktualisieren"><span class="icon">↻</span> Aktualisieren</button>
     <a href="/logout" class="logout">Abmelden</a>
   </nav>
 
   <h1>AdvancedRegionMarket</h1>
   <div class="sub" id="updated">ARM hat kein zuverlaessiges "Region verkauft"-Event (PreBuyEvent feuert vor der eigentlichen Geld-/Besitzuebertragung) - Verkaeufe werden daher erkannt, indem der Sold-Status jeder Region bei jeder Aktualisierung mit dem vorherigen Stand verglichen wird. Zeitstempel = zuerst erkannt, nicht exakter Kaufzeitpunkt.</div>
-
-  <input type="text" class="search-box" id="searchInput" placeholder="Suche nach Spieler, Shop oder Item...">
-  <div id="searchResults" class="panel" style="display:none; margin-bottom:24px;"></div>
-
-  <div class="panel" style="margin-bottom:16px;">
-    <h3 style="margin-top:0;">Regionen filtern / als CSV exportieren</h3>
-    <div class="export-panel" id="export-regionmarket" style="border-top:none; margin-top:0; padding-top:0;">
-      <input type="text" placeholder="Besitzer enthält..." data-param="owner">
-      <input type="text" placeholder="Welt enthält..." data-param="world">
-      <select data-param="sold">
-        <option value="">Alle</option>
-        <option value="true">Verkauft</option>
-        <option value="false">Verfuegbar</option>
-      </select>
-      <button onclick="exportCsv('export-regionmarket', '/api/regionmarket/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
-
-  <div class="panel" style="margin-bottom:16px;">
-    <h3 style="margin-top:0;">Transaktionshistorie filtern / als CSV exportieren</h3>
-    <div class="sub" style="margin-bottom:8px;">Einzelne erkannte Verkaeufe/Ruecknahmen (nicht aggregiert), gefiltert als CSV.</div>
-    <div class="export-panel" id="export-regionmarket-tx" style="border-top:none; margin-top:0; padding-top:0;">
-      <input type="date" data-param="from" title="Von">
-      <input type="date" data-param="to" title="Bis">
-      <select data-param="type">
-        <option value="">Alle Typen</option>
-        <option value="SELL">Verkauf</option>
-        <option value="UNSELL">Ruecknahme</option>
-      </select>
-      <input type="text" placeholder="Spieler" data-param="player">
-      <input type="text" placeholder="Region" data-param="region">
-      <input type="number" placeholder="Min. Preis" data-param="minPrice">
-      <input type="number" placeholder="Max. Preis" data-param="maxPrice">
-      <button onclick="exportCsv('export-regionmarket-tx', '/api/regionmarket/transactions/export.csv')">CSV herunterladen</button>
-    </div>
-  </div>
 
   <div class="grid">
     <div class="panel">
@@ -88,8 +56,11 @@
           </select>
         </div>
       </div>
+      <div class="filter-row" id="filter-owners">
+        <input type="text" placeholder="Spieler enthält..." data-param="name">
+      </div>
       <table>
-        <thead><tr><th>#</th><th>Spieler</th><th style="text-align:right;">Regionen</th><th style="text-align:right;">Kaeufe</th><th style="text-align:right;">Ausgegeben</th></tr></thead>
+        <thead><tr id="rmOwnerTableHead"><th>#</th><th data-sort="owner">Spieler</th><th style="text-align:right;" data-sort="regionCount">Regionen</th><th style="text-align:right;" data-sort="purchases">Kaeufe</th><th style="text-align:right;" data-sort="totalSpent">Ausgegeben</th></tr></thead>
         <tbody id="rmOwnerTable"></tbody>
       </table>
       <div class="sub count-hint" id="ownerCountHint"></div>
@@ -107,47 +78,125 @@
           </select>
         </div>
       </div>
+      <div class="filter-row" id="filter-regions">
+        <input type="text" placeholder="Besitzer enthält..." data-param="owner">
+        <input type="text" placeholder="Welt enthält..." data-param="world">
+        <select data-param="sold">
+          <option value="">Alle</option>
+          <option value="true">Verkauft</option>
+          <option value="false">Verfuegbar</option>
+        </select>
+        <button onclick="exportCsv('filter-regions', '/api/regionmarket/export.csv')">CSV herunterladen</button>
+      </div>
       <table>
-        <thead><tr><th>Region</th><th>Welt</th><th>Typ</th><th>Status</th><th style="text-align:right;">Preis</th></tr></thead>
+        <thead><tr id="rmRegionTableHead"><th data-sort="regionId">Region</th><th data-sort="world">Welt</th><th data-sort="sellType">Typ</th><th data-sort="sold">Status</th><th style="text-align:right;" data-sort="price">Preis</th></tr></thead>
         <tbody id="rmRegionTable"></tbody>
       </table>
       <div class="sub count-hint" id="regionCountHint"></div>
     </div>
   </div>
 
+  <div class="panel" style="margin-top:16px;">
+    <h3 style="margin-top:0;">Transaktionshistorie</h3>
+    <div class="sub" style="margin-bottom:8px;">Einzelne erkannte Verkaeufe/Ruecknahmen (nicht aggregiert). Die Tabelle zeigt eine Live-Vorschau (max. 250 Zeilen) - für den vollständigen, gefilterten Datensatz die CSV verwenden.</div>
+    <div class="filter-row" id="filter-tx">
+      <input type="date" data-param="from" title="Von">
+      <input type="date" data-param="to" title="Bis">
+      <select data-param="type">
+        <option value="">Alle Typen</option>
+        <option value="SELL">Verkauf</option>
+        <option value="UNSELL">Ruecknahme</option>
+      </select>
+      <input type="text" placeholder="Spieler" data-param="player">
+      <input type="text" placeholder="Region" data-param="region">
+      <input type="number" placeholder="Min. Preis" data-param="minPrice">
+      <input type="number" placeholder="Max. Preis" data-param="maxPrice">
+      <button onclick="exportCsv('filter-tx', '/api/regionmarket/transactions/export.csv')">CSV herunterladen</button>
+    </div>
+    <table>
+      <thead><tr id="txTableHead"><th data-sort="timestamp">Zeit</th><th data-sort="type">Typ</th><th data-sort="regionId">Region</th><th data-sort="world">Welt</th><th data-sort="owner">Besitzer</th><th style="text-align:right;" data-sort="price">Preis</th></tr></thead>
+      <tbody id="txTable"></tbody>
+    </table>
+    <div class="sub count-hint" id="txCountHint"></div>
+  </div>
+
 <script src="/app.js"></script>
 <script>
 let topOwners = [];
+let filteredOwners = [];
 let regions = [];
+let filteredRegions = [];
 
 function renderOwners() {
   const size = pageSizeValue(document.getElementById('ownerPageSize'));
-  const shown = sliceForDisplay(topOwners, size);
+  const shown = sliceForDisplay(applySort(filteredOwners, ownerSort), size);
   const ownerBody = document.getElementById('rmOwnerTable');
   ownerBody.innerHTML = '';
+  if (shown.length === 0) ownerBody.innerHTML = '<tr><td colspan="5" class="empty-hint">keine Treffer</td></tr>';
   shown.forEach((o, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + o.owner + '</td><td style="text-align:right;">' + formatNumber(o.regionCount) +
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + playerLink(o.owner) + '</td><td style="text-align:right;">' + formatNumber(o.regionCount) +
       '</td><td style="text-align:right;">' + formatNumber(o.purchases) + '</td><td style="text-align:right;">' + formatMoney(o.totalSpent) + '</td>';
     ownerBody.appendChild(tr);
   });
-  document.getElementById('ownerCountHint').textContent = shown.length + ' von ' + topOwners.length + ' Spielern angezeigt.';
+  document.getElementById('ownerCountHint').textContent = shown.length + ' von ' + filteredOwners.length + ' gefiltert (' + topOwners.length + ' insgesamt).';
 }
 
 function renderRegions() {
   const size = pageSizeValue(document.getElementById('regionPageSize'));
-  const shown = sliceForDisplay(regions, size);
+  const shown = sliceForDisplay(applySort(filteredRegions, regionSort), size);
   const regionBody = document.getElementById('rmRegionTable');
   regionBody.innerHTML = '';
+  if (shown.length === 0) regionBody.innerHTML = '<tr><td colspan="5" class="empty-hint">keine Treffer</td></tr>';
   shown.forEach((r) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + r.regionId + '</td><td>' + r.world + '</td><td>' + r.sellType +
-      '</td><td>' + (r.sold ? ('verkauft (' + r.owner + ')') : 'verfuegbar') +
+    tr.innerHTML = '<td>' + escapeHtml(r.regionId) + '</td><td>' + escapeHtml(r.world) + '</td><td>' + escapeHtml(r.sellType) +
+      '</td><td>' + (r.sold ? ('verkauft (' + playerLink(r.owner) + ')') : 'verfuegbar') +
       '</td><td style="text-align:right;">' + formatPrice(r.price) + '</td>';
     regionBody.appendChild(tr);
   });
-  document.getElementById('regionCountHint').textContent = shown.length + ' von ' + regions.length + ' Regionen angezeigt.';
+  document.getElementById('regionCountHint').textContent = shown.length + ' von ' + filteredRegions.length + ' gefiltert (' + regions.length + ' insgesamt).';
 }
+
+let lastTxRows = [];
+
+function renderTx(rows) {
+  if (rows !== lastTxRows) lastTxRows = rows;
+  rows = applySort(lastTxRows, txSort);
+  const body = document.getElementById('txTable');
+  body.innerHTML = '';
+  if (rows.length === 0) body.innerHTML = '<tr><td colspan="6" class="empty-hint">keine Treffer</td></tr>';
+  rows.forEach((t) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + new Date(t.timestamp).toLocaleString('de-DE') + '</td><td>' + escapeHtml(t.type) + '</td><td>' + escapeHtml(t.regionId) +
+      '</td><td>' + escapeHtml(t.world) + '</td><td>' + playerLink(t.owner) +
+      '</td><td style="text-align:right;">' + formatMoney(t.price) + '</td>';
+    body.appendChild(tr);
+  });
+  document.getElementById('txCountHint').textContent = rows.length + ' Zeilen angezeigt (Live-Vorschau, max. 250).';
+}
+
+const ownerSort = wireSortableTable(document.getElementById('rmOwnerTableHead'), renderOwners);
+const regionSort = wireSortableTable(document.getElementById('rmRegionTableHead'), renderRegions);
+const txSort = wireSortableTable(document.getElementById('txTableHead'), () => renderTx(lastTxRows));
+
+const reapplyOwnerFilter = initClientFilterTable('filter-owners', (v) =>
+  topOwners.filter((o) => !v.name || o.owner.toLowerCase().includes(v.name.toLowerCase())), (filtered) => {
+  filteredOwners = filtered;
+  renderOwners();
+});
+
+const reapplyRegionFilter = initClientFilterTable('filter-regions', (v) =>
+  regions.filter((r) =>
+    (!v.owner || (r.owner || '').toLowerCase().includes(v.owner.toLowerCase())) &&
+    (!v.world || r.world.toLowerCase().includes(v.world.toLowerCase())) &&
+    (!v.sold || String(r.sold) === v.sold)
+  ), (filtered) => {
+  filteredRegions = filtered;
+  renderRegions();
+});
+
+initServerFilterTable('filter-tx', '/api/regionmarket/transactions', renderTx);
 
 async function refreshRegionMarket() {
   try {
@@ -161,13 +210,14 @@ async function refreshRegionMarket() {
 
     topOwners = data.topOwners;
     regions = data.regions;
-    renderOwners();
-    renderRegions();
+    reapplyOwnerFilter();
+    reapplyRegionFilter();
   } catch (e) {
     console.error('Fehler beim Laden der AdvancedRegionMarket-Daten: ' + e);
   }
 }
 
+wireReloadButton([refreshRegionMarket]);
 refreshRegionMarket();
 setInterval(refreshRegionMarket, 30000);
 </script>

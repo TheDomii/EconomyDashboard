@@ -4,6 +4,17 @@ web-server:
   # Address to bind to. Use 0.0.0.0 to allow access from other machines in your network.
   bind-address: "0.0.0.0"
   port: 8080
+  # Optional: the URL players/admins actually reach this dashboard at (e.g.
+  # "http://192.168.1.10:8080" or a reverse-proxy domain). Only used to build clickable
+  # links in Discord webhook alerts - leave empty to send alerts without a link.
+  public-url: ""
+
+# Optional alerting: post a message to a Discord channel whenever a HIGH-severity
+# anomaly is first detected (see the "Anomalie-Erkennung" section in the README).
+# Leave discord-url empty to disable - nothing is sent, no network calls are made.
+# Each anomaly only triggers once per plugin run (tracked in memory, not persisted).
+webhook:
+  discord-url: ""
 
 # How often (in seconds) the economy snapshot used by the dashboard is refreshed.
 refresh-interval-seconds: 60
@@ -17,6 +28,10 @@ modules:
   towny: true
   quickshop: true
   regionmarket: true
+  # Tracks join/quit times and periodic online-count samples for the "Spieler" page
+  # (daily unique players, peak online, busiest hour of day). Needs no other plugin.
+  # Collection only starts once this is enabled - there is no historical backfill.
+  player-activity: true
 
 # If true, extra detail is written to the server console - which dtlTradersPlus log
 # lines couldn't be parsed, etc. Useful when something looks wrong in the

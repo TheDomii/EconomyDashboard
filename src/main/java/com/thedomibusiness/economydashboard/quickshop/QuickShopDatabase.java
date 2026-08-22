@@ -2,6 +2,7 @@ package com.thedomibusiness.economydashboard.quickshop;
 
 import com.thedomibusiness.economydashboard.filter.TransactionFilter;
 import com.thedomibusiness.economydashboard.web.CsvBuilder;
+import com.thedomibusiness.economydashboard.web.JsonUtil;
 
 import java.io.File;
 import java.sql.Connection;
@@ -49,25 +50,40 @@ public class QuickShopDatabase implements AutoCloseable {
     /** Replaces the whole shop registry with the given list (mirrors QuickShop's live state). */
     public void replaceShops(List<QuickShopSnapshot.ShopListing> shops) throws SQLException {
         connection.setAutoCommit(false);
-        try (Statement st = connection.createStatement()) {
-            st.execute("DELETE FROM shops");
-        }
-        try (PreparedStatement ps = connection.prepareStatement(
-                "INSERT INTO shops(location, owner, item_name, price, shop_buys, updated_at) VALUES (?, ?, ?, ?, ?, ?)")) {
-            long now = System.currentTimeMillis();
-            for (QuickShopSnapshot.ShopListing s : shops) {
-                ps.setString(1, s.location);
-                ps.setString(2, s.owner);
-                ps.setString(3, s.item);
-                ps.setDouble(4, s.price);
-                ps.setInt(5, s.shopBuys ? 1 : 0);
-                ps.setLong(6, now);
-                ps.addBatch();
+        try {
+            try (Statement st = connection.createStatement()) {
+                st.execute("DELETE FROM shops");
             }
-            ps.executeBatch();
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "INSERT INTO shops(location, owner, item_name, price, shop_buys, updated_at) VALUES (?, ?, ?, ?, ?, ?)")) {
+                long now = System.currentTimeMillis();
+                for (QuickShopSnapshot.ShopListing s : shops) {
+                    ps.setString(1, s.location);
+                    ps.setString(2, s.owner);
+                    ps.setString(3, s.item);
+                    ps.setDouble(4, s.price);
+                    ps.setInt(5, s.shopBuys ? 1 : 0);
+                    ps.setLong(6, now);
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+            }
+            connection.commit();
+        } catch (SQLException e) {
+            // A failed statement (e.g. disk full) can leave SQLite's own transaction state
+            // already rolled back while the JDBC connection still thinks one is open - calling
+            // rollback() here can itself throw "no transaction is active". Either way, the
+            // finally block's setAutoCommit(true) is what actually matters: without it, every
+            // future call starts an ever-deeper stuck transaction and never recovers, even once
+            // the original problem (e.g. the full disk) is gone.
+            try {
+                connection.rollback();
+            } catch (SQLException ignored) {
+            }
+            throw e;
+        } finally {
+            connection.setAutoCommit(true);
         }
-        connection.commit();
-        connection.setAutoCommit(true);
     }
 
     public void insertTransaction(String type, String player, String owner, String itemName,
@@ -190,53 +206,103 @@ public class QuickShopDatabase implements AutoCloseable {
         return csv.build();
     }
 
-    /** Raw (non-aggregated) transaction rows for CSV export, with optional filters. Newest first. */
-    public String exportTransactionsCsv(TransactionFilter filter) throws SQLException {
-        StringBuilder where = new StringBuilder(" WHERE 1=1");
-        List<Object> params = new ArrayList<>();
+    /** One row per (item, player) with their total sold quantity - raw material for anomaly detection. */
+    public List<com.thedomibusiness.economydashboard.anomaly.SellVolumeRow> sellVolumeByItemAndPlayer() throws SQLException {
+        List<com.thedomibusiness.economydashboard.anomaly.SellVolumeRow> result = new ArrayList<>();
+        try (Statement st = connection.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT item_name, player, SUM(amount) FROM transactions " +
+                             "WHERE type = 'SELL' AND item_name IS NOT NULL AND player IS NOT NULL " +
+                             "GROUP BY item_name, player")) {
+            while (rs.next()) {
+                result.add(new com.thedomibusiness.economydashboard.anomaly.SellVolumeRow(
+                        rs.getString(1), rs.getString(2), rs.getLong(3), "QuickShop"));
+            }
+        }
+        return result;
+    }
 
+    /** Most recent transactions as human-readable activity lines, newest first - for the "Live-Aktivität" feed. */
+    public List<com.thedomibusiness.economydashboard.activity.ActivityEvent> recentActivity(int limit) throws SQLException {
+        List<com.thedomibusiness.economydashboard.activity.ActivityEvent> result = new ArrayList<>();
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT timestamp_millis, type, player, owner, item_name, amount, price FROM transactions " +
+                        "ORDER BY timestamp_millis DESC LIMIT ?")) {
+            ps.setInt(1, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    long ts = rs.getLong(1);
+                    String type = rs.getString(2);
+                    String player = rs.getString(3);
+                    String owner = rs.getString(4);
+                    String item = rs.getString(5);
+                    int amount = rs.getInt(6);
+                    double price = rs.getDouble(7);
+                    String desc = "BUY".equals(type)
+                            ? player + " kaufte " + amount + "x " + item + " im Shop von " + owner + " fuer " + JsonUtil.money(price)
+                            : player + " verkaufte " + amount + "x " + item + " an den Shop von " + owner + " fuer " + JsonUtil.money(price);
+                    result.add(new com.thedomibusiness.economydashboard.activity.ActivityEvent(ts, "QuickShop", player, desc));
+                }
+            }
+        }
+        return result;
+    }
+
+    private static class FilterSql {
+        final StringBuilder where = new StringBuilder(" WHERE 1=1");
+        final List<Object> params = new ArrayList<>();
+    }
+
+    private FilterSql buildFilterSql(TransactionFilter filter) {
+        FilterSql f = new FilterSql();
         if (filter.fromMillis != null) {
-            where.append(" AND timestamp_millis >= ?");
-            params.add(filter.fromMillis);
+            f.where.append(" AND timestamp_millis >= ?");
+            f.params.add(filter.fromMillis);
         }
         if (filter.toMillis != null) {
-            where.append(" AND timestamp_millis <= ?");
-            params.add(filter.toMillis);
+            f.where.append(" AND timestamp_millis <= ?");
+            f.params.add(filter.toMillis);
         }
         if (filter.type != null) {
-            where.append(" AND type = ?");
-            params.add(filter.type.toUpperCase());
+            f.where.append(" AND type = ?");
+            f.params.add(filter.type.toUpperCase());
         }
         if (filter.player != null) {
-            where.append(" AND player LIKE ? COLLATE NOCASE");
-            params.add("%" + filter.player + "%");
+            f.where.append(" AND player LIKE ? COLLATE NOCASE");
+            f.params.add("%" + filter.player + "%");
         }
         if (filter.counterparty != null) {
-            where.append(" AND owner LIKE ? COLLATE NOCASE");
-            params.add("%" + filter.counterparty + "%");
+            f.where.append(" AND owner LIKE ? COLLATE NOCASE");
+            f.params.add("%" + filter.counterparty + "%");
         }
         if (filter.item != null) {
-            where.append(" AND item_name LIKE ? COLLATE NOCASE");
-            params.add("%" + filter.item + "%");
+            f.where.append(" AND item_name LIKE ? COLLATE NOCASE");
+            f.params.add("%" + filter.item + "%");
         }
         if (filter.minPrice != null) {
-            where.append(" AND price >= ?");
-            params.add(filter.minPrice);
+            f.where.append(" AND price >= ?");
+            f.params.add(filter.minPrice);
         }
         if (filter.maxPrice != null) {
-            where.append(" AND price <= ?");
-            params.add(filter.maxPrice);
+            f.where.append(" AND price <= ?");
+            f.params.add(filter.maxPrice);
         }
+        return f;
+    }
+
+    /** Raw (non-aggregated) transaction rows for CSV export, with optional filters. Newest first. */
+    public String exportTransactionsCsv(TransactionFilter filter) throws SQLException {
+        FilterSql f = buildFilterSql(filter);
 
         String sql = "SELECT timestamp_millis, type, player, owner, item_name, amount, price FROM transactions"
-                + where + " ORDER BY timestamp_millis DESC LIMIT ?";
-        params.add(filter.limit);
+                + f.where + " ORDER BY timestamp_millis DESC LIMIT ?";
+        f.params.add(filter.limit);
 
         CsvBuilder csv = new CsvBuilder();
         csv.header("timestamp", "type", "player", "owner", "item", "amount", "price");
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            for (int i = 0; i < params.size(); i++) {
-                ps.setObject(i + 1, params.get(i));
+            for (int i = 0; i < f.params.size(); i++) {
+                ps.setObject(i + 1, f.params.get(i));
             }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -246,6 +312,82 @@ public class QuickShopDatabase implements AutoCloseable {
             }
         }
         return csv.build();
+    }
+
+    /** Same rows as {@link #exportTransactionsCsv}, as a JSON array for the live table preview. */
+    public String queryTransactionsJson(TransactionFilter filter) throws SQLException {
+        FilterSql f = buildFilterSql(filter);
+
+        String sql = "SELECT timestamp_millis, type, player, owner, item_name, amount, price FROM transactions"
+                + f.where + " ORDER BY timestamp_millis DESC LIMIT ?";
+        f.params.add(filter.limit);
+
+        StringBuilder json = new StringBuilder("[");
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (int i = 0; i < f.params.size(); i++) {
+                ps.setObject(i + 1, f.params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    first = false;
+                    json.append("{\"timestamp\":").append(rs.getLong(1)).append(",")
+                            .append("\"type\":").append(JsonUtil.quoteOrNull(rs.getString(2))).append(",")
+                            .append("\"player\":").append(JsonUtil.quoteOrNull(rs.getString(3))).append(",")
+                            .append("\"owner\":").append(JsonUtil.quoteOrNull(rs.getString(4))).append(",")
+                            .append("\"item\":").append(JsonUtil.quoteOrNull(rs.getString(5))).append(",")
+                            .append("\"amount\":").append(rs.getInt(6)).append(",")
+                            .append("\"price\":").append(JsonUtil.money(rs.getDouble(7)))
+                            .append("}");
+                }
+            }
+        }
+        json.append("]");
+        return json.toString();
+    }
+
+    /** Aggregate stats for one player (as a customer) plus the shops they own, for the player profile page. */
+    public String playerSummaryJson(String playerName) throws SQLException {
+        int transactions = 0;
+        double spent = 0;
+        double earned = 0;
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT COUNT(*), " +
+                        "COALESCE(SUM(CASE WHEN type = 'BUY' THEN price ELSE 0 END), 0), " +
+                        "COALESCE(SUM(CASE WHEN type = 'SELL' THEN price ELSE 0 END), 0) " +
+                        "FROM transactions WHERE player = ? COLLATE NOCASE")) {
+            ps.setString(1, playerName);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    transactions = rs.getInt(1);
+                    spent = rs.getDouble(2);
+                    earned = rs.getDouble(3);
+                }
+            }
+        }
+
+        StringBuilder shops = new StringBuilder("[");
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT item_name, price, shop_buys, location FROM shops WHERE owner = ? COLLATE NOCASE ORDER BY item_name")) {
+            ps.setString(1, playerName);
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) shops.append(",");
+                    first = false;
+                    shops.append("{\"item\":").append(JsonUtil.quoteOrNull(rs.getString(1))).append(",")
+                            .append("\"price\":").append(JsonUtil.money(rs.getDouble(2))).append(",")
+                            .append("\"shopBuys\":").append(rs.getInt(3) == 1).append(",")
+                            .append("\"location\":").append(JsonUtil.quoteOrNull(rs.getString(4)))
+                            .append("}");
+                }
+            }
+        }
+        shops.append("]");
+
+        return "{\"transactions\":" + transactions + ",\"spent\":" + JsonUtil.money(spent)
+                + ",\"earned\":" + JsonUtil.money(earned) + ",\"shopsOwned\":" + shops + "}";
     }
 
     @Override

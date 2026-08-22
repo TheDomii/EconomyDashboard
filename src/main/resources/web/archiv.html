@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archiv - Server-Wirtschaft Dashboard</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="/">Übersicht</a>
+    <a href="/economy.html">Wirtschaft</a>
+    <a href="/traders.html">Händler</a>
+    <a href="/towny.html">Towny</a>
+    <a href="/quickshops.html">QuickShops</a>
+    <a href="/regionmarket.html">AdvancedRegionMarket</a>
+    <a href="/players.html">Spieler</a>
+    <a href="/archiv.html" class="active">Archiv</a>
+    <span class="spacer"></span>
+    <button id="reloadBtn" class="reload-btn" title="Jetzt aktualisieren"><span class="icon">↻</span> Aktualisieren</button>
+    <a href="/logout" class="logout">Abmelden</a>
+  </nav>
+
+  <h1>Archiv</h1>
+  <div class="sub" id="updated">Auffälligkeiten aus "Handlungsbedarf", die als geprüft markiert wurden - sie tauchen dort nicht mehr auf. "Wiederherstellen" entfernt den Eintrag hier wieder; taucht die Auffälligkeit noch in den Daten auf, erscheint sie beim nächsten Erkennungslauf erneut im Handlungsbedarf.</div>
+
+  <div class="panel">
+    <div class="filter-row" id="filter-archive">
+      <input type="text" placeholder="Titel/Beschreibung enthält..." data-param="text">
+      <select data-param="severity">
+        <option value="">Alle Schweregrade</option>
+        <option value="HIGH">Hoch</option>
+        <option value="MEDIUM">Mittel</option>
+      </select>
+      <button onclick="window.location.href='/api/anomalies/archive/export.csv'">CSV herunterladen</button>
+    </div>
+    <table>
+      <thead><tr id="archiveTableHead">
+        <th data-sort="approvedAtMillis">Geprüft am</th>
+        <th data-sort="severityLabel">Schweregrad</th>
+        <th data-sort="categoryLabel">Kategorie</th>
+        <th data-sort="title">Titel</th>
+        <th>Beschreibung</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="archiveTable"></tbody>
+    </table>
+    <div class="sub count-hint" id="archiveCountHint"></div>
+  </div>
+
+<script src="/app.js"></script>
+<script>
+const CATEGORY_LABELS = {
+  'player-oversell': 'Spieler-Überverkauf',
+  'item-volume': 'Item-Volumen',
+  'town-plots': 'Stadt-Plots'
+};
+
+let archive = [];
+let filteredArchive = [];
+
+function renderTable() {
+  const sorted = applySort(filteredArchive, archiveSort);
+  const body = document.getElementById('archiveTable');
+  body.innerHTML = '';
+  if (sorted.length === 0) {
+    body.innerHTML = '<tr><td colspan="6" class="empty-hint">keine Einträge</td></tr>';
+  }
+  sorted.forEach((a) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + new Date(a.approvedAtMillis).toLocaleString('de-DE') + '</td>' +
+      '<td>' + (a.severity === 'HIGH' ? 'Hoch' : 'Mittel') + '</td>' +
+      '<td>' + escapeHtml(a.categoryLabel) + '</td>' +
+      '<td>' + escapeHtml(a.title) + '</td>' +
+      '<td>' + escapeHtml(a.description) + (a.linkUrl ? ' <a href="' + escapeHtml(a.linkUrl) + '">Ansehen &rarr;</a>' : '') + '</td>' +
+      '<td></td>';
+    const restoreBtn = document.createElement('button');
+    restoreBtn.className = 'anomaly-approve-btn';
+    restoreBtn.textContent = 'Wiederherstellen';
+    restoreBtn.title = 'Aus dem Archiv entfernen';
+    restoreBtn.addEventListener('click', async () => {
+      restoreBtn.disabled = true;
+      try {
+        await fetch('/api/anomalies/unapprove?key=' + encodeURIComponent(a.key), { method: 'POST' });
+        archive = archive.filter((x) => x.key !== a.key);
+        reapplyFilter();
+      } catch (e) {
+        console.error('Fehler beim Wiederherstellen: ' + e);
+        restoreBtn.disabled = false;
+      }
+    });
+    tr.lastElementChild.appendChild(restoreBtn);
+    body.appendChild(tr);
+  });
+  document.getElementById('archiveCountHint').textContent =
+    sorted.length + ' von ' + filteredArchive.length + ' gefiltert (' + archive.length + ' insgesamt).';
+}
+
+const archiveSort = wireSortableTable(document.getElementById('archiveTableHead'), renderTable);
+
+const reapplyFilter = initClientFilterTable('filter-archive', (v) =>
+  archive.filter((a) =>
+    (!v.text || (a.title + ' ' + a.description).toLowerCase().includes(v.text.toLowerCase())) &&
+    (!v.severity || a.severity === v.severity)
+  ), (filtered) => {
+  filteredArchive = filtered;
+  renderTable();
+});
+
+async function refreshArchive() {
+  try {
+    const res = await fetch('/api/anomalies/archive');
+    const data = await res.json();
+    archive = data.map((a) => ({
+      ...a,
+      severityLabel: a.severity === 'HIGH' ? 'Hoch' : 'Mittel',
+      categoryLabel: CATEGORY_LABELS[a.category] || a.category
+    }));
+    reapplyFilter();
+  } catch (e) {
+    document.getElementById('updated').textContent = 'Fehler beim Laden: ' + e;
+  }
+}
+
+wireReloadButton([refreshArchive]);
+refreshArchive();
+setInterval(refreshArchive, 60000);
+</script>
+</body>
+</html>
